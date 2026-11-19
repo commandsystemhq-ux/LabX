@@ -13,12 +13,15 @@ export type Dir = "rtl" | "ltr";
 /** A bilingual string. All user-facing copy in mock data uses this shape. */
 export type L10n = { ar: string; en: string };
 
-const STORAGE_KEY = "scienceverse.lang";
+const STORAGE_KEY = "labx.lang";
 
 /** UI chrome strings (content strings live next to their data in src/data). */
 export const ui = {
-  brand: { ar: "ساينس فيرس", en: "ScienceVerse" },
-  brandTagline: { ar: "النظام التعليمي التفاعلي للمدارس", en: "Interactive Learning System for Schools" },
+  brand: { ar: "لاب إكس", en: "LabX" },
+  brandTagline: {
+    ar: "النظام التعليمي التفاعلي للمدارس",
+    en: "Interactive Learning System for Schools",
+  },
   startFree: { ar: "ابدأ مجاناً", en: "Start free" },
   grade: { ar: "الصف", en: "Grade" },
   dashboard: { ar: "لوحة المنهج", en: "Dashboard" },

@@ -9,7 +9,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * ScienceVerse design system — dark-first, deep-space navy, glass surfaces.
+ * LabX design system — dark-first, deep-space navy, glass surfaces.
  * Subject accents: biology (emerald), physics (cyan), chemistry (violet).
  * Any element with data-subject="..." re-scopes --subject / --primary to that accent.
  */
@@ -131,17 +131,33 @@
   --sidebar-ring: var(--phys);
 
   /* Gradients & effects */
-  --gradient-brand: linear-gradient(110deg, var(--bio), var(--phys) 50%, var(--chem));
+  /* LabX logo palette: electric blue → cyan → mint green */
+  --brand-blue: #1f5bff;
+  --brand-green: #00f0a8;
+  --gradient-brand: linear-gradient(110deg, var(--brand-blue), var(--phys) 50%, var(--brand-green));
   --gradient-subject: linear-gradient(
     135deg,
     var(--subject),
     color-mix(in oklab, var(--subject) 55%, var(--foreground))
   );
   --gradient-space:
-    radial-gradient(60% 50% at 80% 0%, color-mix(in oklab, var(--phys) 16%, transparent), transparent 70%),
-    radial-gradient(50% 40% at 10% 20%, color-mix(in oklab, var(--chem) 12%, transparent), transparent 70%),
-    radial-gradient(60% 50% at 50% 110%, color-mix(in oklab, var(--bio) 10%, transparent), transparent 70%);
-  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--subject) 30%, transparent),
+    radial-gradient(
+      60% 50% at 80% 0%,
+      color-mix(in oklab, var(--phys) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 40% at 10% 20%,
+      color-mix(in oklab, var(--chem) 12%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      60% 50% at 50% 110%,
+      color-mix(in oklab, var(--bio) 10%, transparent),
+      transparent 70%
+    );
+  --shadow-glow:
+    0 0 0 1px color-mix(in oklab, var(--subject) 30%, transparent),
     0 18px 50px -18px color-mix(in oklab, var(--subject) 60%, transparent);
   --shadow-card: 0 1px 0 0 oklch(1 0 0 / 0.04) inset, 0 20px 40px -24px oklch(0 0 0 / 0.7);
 }
@@ -164,7 +180,8 @@
     var(--subject),
     color-mix(in oklab, var(--subject) 55%, var(--foreground))
   );
-  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--subject) 30%, transparent),
+  --shadow-glow:
+    0 0 0 1px color-mix(in oklab, var(--subject) 30%, transparent),
     0 18px 50px -18px color-mix(in oklab, var(--subject) 60%, transparent);
 }
 
@@ -231,9 +248,17 @@
 @utility bg-stage-grid {
   background-color: oklch(0.12 0.02 264);
   background-image:
-    radial-gradient(70% 60% at 50% 45%, color-mix(in oklab, var(--subject) 10%, transparent), transparent 75%),
+    radial-gradient(
+      70% 60% at 50% 45%,
+      color-mix(in oklab, var(--subject) 10%, transparent),
+      transparent 75%
+    ),
     linear-gradient(color-mix(in oklab, var(--subject) 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklab, var(--subject) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--subject) 9%, transparent) 1px,
+      transparent 1px
+    ),
     linear-gradient(oklch(1 0 0 / 0.025) 1px, transparent 1px),
     linear-gradient(90deg, oklch(1 0 0 / 0.025) 1px, transparent 1px);
   background-size:

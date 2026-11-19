@@ -65,7 +65,12 @@ function LessonRow({ lesson, index }: { lesson: Lesson; index: number }) {
             />
           </div>
         </div>
-        <Button asChild size="sm" variant={s === "inProgress" ? "subject" : "subject-soft"} className="rounded-full">
+        <Button
+          asChild
+          size="sm"
+          variant={s === "inProgress" ? "subject" : "subject-soft"}
+          className="rounded-full"
+        >
           <Link to="/lesson" search={{ id: lesson.id }}>
             <ActionIcon />
             {action}
@@ -80,7 +85,10 @@ export function UnitCard({ unit, index }: { unit: Unit; index: number }) {
   const { l, lang, t } = useLang();
   const avg = Math.round(unit.lessons.reduce((s, x) => s + x.mastery, 0) / unit.lessons.length);
   return (
-    <article className="glass animate-fade-up rounded-3xl p-4 sm:p-5" style={{ animationDelay: `${index * 80}ms` }}>
+    <article
+      className="glass animate-fade-up rounded-3xl p-4 sm:p-5"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
       <header className="mb-3 flex items-center justify-between gap-3 px-1">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-widest text-subject">

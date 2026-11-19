@@ -32,8 +32,14 @@ export function ControlPanel({ sim, values, onChange, onCommit }: Props) {
             return (
               <div key={v.key} className="rounded-2xl border border-border bg-background/40 p-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-sm font-semibold" htmlFor={`var-${v.key}`}>
-                    <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-subject/15 px-1 font-mono text-[11px] font-bold text-subject" dir="ltr">
+                  <label
+                    className="flex items-center gap-2 text-sm font-semibold"
+                    htmlFor={`var-${v.key}`}
+                  >
+                    <span
+                      className="flex h-6 min-w-6 items-center justify-center rounded-md bg-subject/15 px-1 font-mono text-[11px] font-bold text-subject"
+                      dir="ltr"
+                    >
                       {v.symbol}
                     </span>
                     {l(v.label)}
@@ -55,8 +61,14 @@ export function ControlPanel({ sim, values, onChange, onCommit }: Props) {
                   aria-label={l(v.label)}
                 />
                 <div className="mt-1.5 flex justify-between font-mono text-[10px] text-muted-foreground">
-                  <span>{v.min}{v.unit}</span>
-                  <span>{v.max}{v.unit}</span>
+                  <span>
+                    {v.min}
+                    {v.unit}
+                  </span>
+                  <span>
+                    {v.max}
+                    {v.unit}
+                  </span>
                 </div>
               </div>
             );
@@ -78,7 +90,12 @@ export function ControlPanel({ sim, values, onChange, onCommit }: Props) {
               }
             >
               <p className="truncate text-[10px] text-muted-foreground">{l(r.label)}</p>
-              <p className={"mt-1 font-mono text-lg font-bold tabular-nums " + (i === 0 ? "text-subject" : "")} dir="ltr">
+              <p
+                className={
+                  "mt-1 font-mono text-lg font-bold tabular-nums " + (i === 0 ? "text-subject" : "")
+                }
+                dir="ltr"
+              >
                 {Number.isFinite(r.value) ? r.value.toFixed(r.digits) : "∞"}
               </p>
               <p className="font-mono text-[10px] text-muted-foreground" dir="ltr">

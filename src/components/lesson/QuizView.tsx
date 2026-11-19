@@ -79,7 +79,10 @@ export function QuizView({ sim, onSeeMistake }: Props) {
         </p>
         <div className="flex gap-1.5">
           {sim.quiz.map((_, i) => (
-            <span key={i} className={"h-1.5 w-8 rounded-full " + (i <= index ? "bg-subject" : "bg-muted")} />
+            <span
+              key={i}
+              className={"h-1.5 w-8 rounded-full " + (i <= index ? "bg-subject" : "bg-muted")}
+            />
           ))}
         </div>
       </div>
@@ -111,10 +114,22 @@ export function QuizView({ sim, onSeeMistake }: Props) {
               <span
                 className={
                   "flex size-8 shrink-0 items-center justify-center rounded-xl font-mono text-xs font-bold " +
-                  (isRight ? "bg-bio text-primary-foreground" : isWrong ? "bg-destructive text-destructive-foreground" : "bg-muted")
+                  (isRight
+                    ? "bg-bio text-primary-foreground"
+                    : isWrong
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-muted")
                 }
               >
-                {isRight ? <CheckCircle2 className="size-4" /> : isWrong ? <XCircle className="size-4" /> : lang === "ar" ? "أبجد"[i] : "ABCD"[i]}
+                {isRight ? (
+                  <CheckCircle2 className="size-4" />
+                ) : isWrong ? (
+                  <XCircle className="size-4" />
+                ) : lang === "ar" ? (
+                  "أبجد"[i]
+                ) : (
+                  "ABCD"[i]
+                )}
               </span>
               {l(opt)}
             </button>

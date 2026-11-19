@@ -41,7 +41,9 @@ export function SimulationStage(props: Props) {
     <div
       className={
         "relative isolate overflow-hidden rounded-3xl border border-subject/25 bg-stage-grid " +
-        (board ? "h-full" : "aspect-[4/3] min-h-[340px] sm:aspect-[16/10] lg:aspect-auto lg:h-[min(64vh,640px)]")
+        (board
+          ? "h-full"
+          : "aspect-[4/3] min-h-[340px] sm:aspect-[16/10] lg:aspect-auto lg:h-[min(64vh,640px)]")
       }
     >
       {/* TODO: Mount Three.js Canvas here
@@ -49,23 +51,44 @@ export function SimulationStage(props: Props) {
           and remove the SVG preview layer below. */}
       <div className="absolute inset-0 flex items-center justify-center p-4 pb-20 pt-14" dir="ltr">
         <div key={view} className="h-full w-full animate-fade-up">
-          <Scene t={time} values={values} activity={activity} labels={layers.labels} flow={layers.flow} />
+          <Scene
+            t={time}
+            values={values}
+            activity={activity}
+            labels={layers.labels}
+            flow={layers.flow}
+          />
         </div>
       </div>
 
       {/* Corner brackets */}
-      {["top-3 left-3 border-t-2 border-l-2", "top-3 right-3 border-t-2 border-r-2", "bottom-3 left-3 border-b-2 border-l-2", "bottom-3 right-3 border-b-2 border-r-2"].map((c) => (
-        <span key={c} className={`pointer-events-none absolute size-5 rounded-sm border-subject/50 ${c}`} />
+      {[
+        "top-3 left-3 border-t-2 border-l-2",
+        "top-3 right-3 border-t-2 border-r-2",
+        "bottom-3 left-3 border-b-2 border-l-2",
+        "bottom-3 right-3 border-b-2 border-r-2",
+      ].map((c) => (
+        <span
+          key={c}
+          className={`pointer-events-none absolute size-5 rounded-sm border-subject/50 ${c}`}
+        />
       ))}
 
       {/* HUD */}
       <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="glass flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest">
-            <Radio className={"size-3 " + (props.playing ? "animate-blink text-destructive" : "text-muted-foreground")} />
+            <Radio
+              className={
+                "size-3 " +
+                (props.playing ? "animate-blink text-destructive" : "text-muted-foreground")
+              }
+            />
             {props.playing ? "live" : "paused"}
           </span>
-          <span className="glass rounded-full px-2.5 py-1 text-[11px] font-semibold text-subject">{t(view)}</span>
+          <span className="glass rounded-full px-2.5 py-1 text-[11px] font-semibold text-subject">
+            {t(view)}
+          </span>
         </div>
         <span className="glass hidden rounded-full px-2.5 py-1 font-mono text-[10px] text-muted-foreground sm:inline">
           VIEWPORT · 3D-READY · t={time.toFixed(1)}s
@@ -79,7 +102,8 @@ export function SimulationStage(props: Props) {
             <div key={r.key} className="glass rounded-2xl px-4 py-2 text-end">
               <p className="text-xs text-muted-foreground">{l(r.label)}</p>
               <p className="font-mono text-3xl font-bold text-subject">
-                {Number.isFinite(r.value) ? r.value.toFixed(r.digits) : "∞"} <span className="text-base text-muted-foreground">{r.unit}</span>
+                {Number.isFinite(r.value) ? r.value.toFixed(r.digits) : "∞"}{" "}
+                <span className="text-base text-muted-foreground">{r.unit}</span>
               </p>
             </div>
           ))}
@@ -95,7 +119,9 @@ export function SimulationStage(props: Props) {
               {lang === "ar" ? "قصة من الواقع" : "Real-world story"}
             </p>
             <h3 className="mt-3 text-xl font-bold sm:text-2xl">{l(sim.story.title)}</h3>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">{l(sim.story.body)}</p>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              {l(sim.story.body)}
+            </p>
             <p className="mt-4 rounded-2xl border border-subject/30 bg-subject/10 p-3 text-sm font-semibold">
               🤔 {l(sim.story.question)}
             </p>
@@ -112,7 +138,10 @@ export function SimulationStage(props: Props) {
 
       {/* Step 2 — live formula overlay */}
       {step === 2 && (
-        <div className="glass-strong absolute start-4 top-14 z-10 animate-fade-up rounded-2xl px-4 py-3" dir="ltr">
+        <div
+          className="glass-strong absolute start-4 top-14 z-10 animate-fade-up rounded-2xl px-4 py-3"
+          dir="ltr"
+        >
           <p className="font-display text-2xl font-bold text-subject">{sim.formula}</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{sim.formulaLive(values)}</p>
         </div>
@@ -129,7 +158,12 @@ export function SimulationStage(props: Props) {
               <p className="text-xs font-bold text-warning">{t("demoMode")}</p>
               <p className="mt-0.5 text-sm">{props.demoNote}</p>
             </div>
-            <button type="button" onClick={props.onDismissDemo} aria-label={t("hideNote")} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+            <button
+              type="button"
+              onClick={props.onDismissDemo}
+              aria-label={t("hideNote")}
+              className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
               <X className="size-4" />
             </button>
           </div>

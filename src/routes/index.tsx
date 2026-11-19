@@ -8,13 +8,13 @@ import { WhyStrip } from "@/components/landing/WhyStrip";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ScienceVerse — محاكاة علوم تفاعلية ثلاثية الأبعاد لمنهج الوزارة" },
+      { title: "LabX — محاكاة علوم تفاعلية ثلاثية الأبعاد لمنهج الوزارة" },
       {
         name: "description",
         content:
-          "ScienceVerse: interactive 3D biology, physics and chemistry simulations for the Egyptian secondary curriculum, with a context-aware AI tutor.",
+          "LabX: interactive 3D biology, physics and chemistry simulations for the Egyptian secondary curriculum, with a context-aware AI tutor.",
       },
-      { property: "og:title", content: "ScienceVerse — العلوم بتتشاف مش بتتحفظ" },
+      { property: "og:title", content: "LabX — العلوم بتتشاف مش بتتحفظ" },
       {
         property: "og:description",
         content: "Interactive 3D science simulations for the Egyptian curriculum with an AI tutor.",

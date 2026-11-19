@@ -13,13 +13,17 @@ export const Route = createFileRoute("/lesson")({
   }),
   head: () => ({
     meta: [
-      { title: "مساحة الدرس التفاعلية — ScienceVerse" },
+      { title: "مساحة الدرس التفاعلية — LabX" },
       {
         name: "description",
-        content: "Interactive lesson workspace: live simulation, variable sliders, real-time graph, AI tutor and visual quiz.",
+        content:
+          "Interactive lesson workspace: live simulation, variable sliders, real-time graph, AI tutor and visual quiz.",
       },
-      { property: "og:title", content: "Interactive Lesson & Simulation — ScienceVerse" },
-      { property: "og:description", content: "Drag the variables, watch the simulation react, and ask the AI tutor why." },
+      { property: "og:title", content: "Interactive Lesson & Simulation — LabX" },
+      {
+        property: "og:description",
+        content: "Drag the variables, watch the simulation react, and ask the AI tutor why.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

@@ -13,14 +13,66 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
   const cy = 190;
 
   return (
-    <svg viewBox="0 0 600 380" className="h-full w-full" role="img" aria-label="Cell diffusion simulation">
+    <svg
+      viewBox="0 0 600 380"
+      className="h-full w-full"
+      role="img"
+      aria-label="Cell diffusion simulation"
+    >
       <circle cx={cx} cy={cy} r="130" fill="var(--bio)" fillOpacity="0.07" />
-      <circle cx={cx} cy={cy} r="120" fill="var(--bio)" fillOpacity="0.06" stroke="var(--bio)" strokeWidth="5" strokeDasharray={`${4 + values.permeability / 10} 6`} strokeDashoffset={-t * 14} />
-      <circle cx={cx} cy={cy} r="112" fill="none" stroke="var(--bio)" strokeOpacity="0.35" strokeWidth="2" />
-      <circle cx={cx + 10} cy={cy - 5} r="38" fill="var(--bio)" fillOpacity="0.2" stroke="var(--bio)" strokeOpacity="0.6" strokeWidth="2" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r="120"
+        fill="var(--bio)"
+        fillOpacity="0.06"
+        stroke="var(--bio)"
+        strokeWidth="5"
+        strokeDasharray={`${4 + values.permeability / 10} 6`}
+        strokeDashoffset={-t * 14}
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r="112"
+        fill="none"
+        stroke="var(--bio)"
+        strokeOpacity="0.35"
+        strokeWidth="2"
+      />
+      <circle
+        cx={cx + 10}
+        cy={cy - 5}
+        r="38"
+        fill="var(--bio)"
+        fillOpacity="0.2"
+        stroke="var(--bio)"
+        strokeOpacity="0.6"
+        strokeWidth="2"
+      />
       <circle cx={cx + 16} cy={cy - 10} r="10" fill="var(--bio)" fillOpacity="0.45" />
-      <ellipse cx={cx - 60} cy={cy + 45} rx="22" ry="10" fill="none" stroke="var(--warning)" strokeOpacity="0.6" strokeWidth="2" transform={`rotate(-20 ${cx - 60} ${cy + 45})`} />
-      <ellipse cx={cx + 55} cy={cy + 60} rx="18" ry="8" fill="none" stroke="var(--warning)" strokeOpacity="0.6" strokeWidth="2" transform={`rotate(25 ${cx + 55} ${cy + 60})`} />
+      <ellipse
+        cx={cx - 60}
+        cy={cy + 45}
+        rx="22"
+        ry="10"
+        fill="none"
+        stroke="var(--warning)"
+        strokeOpacity="0.6"
+        strokeWidth="2"
+        transform={`rotate(-20 ${cx - 60} ${cy + 45})`}
+      />
+      <ellipse
+        cx={cx + 55}
+        cy={cy + 60}
+        rx="18"
+        ry="8"
+        fill="none"
+        stroke="var(--warning)"
+        strokeOpacity="0.6"
+        strokeWidth="2"
+        transform={`rotate(25 ${cx + 55} ${cy + 60})`}
+      />
 
       {Array.from({ length: 40 }, (_, i) => {
         if (i >= count) return null;
@@ -30,7 +82,16 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
         const x = cx + Math.cos(a) * r * 1.15;
         const y = cy + Math.sin(a) * r * 0.85;
         const inside = r < 120;
-        return <circle key={i} cx={x} cy={y} r="5" fill={inside ? "var(--bio)" : "var(--foreground)"} fillOpacity={inside ? 0.9 : 0.75} />;
+        return (
+          <circle
+            key={i}
+            cx={x}
+            cy={y}
+            r="5"
+            fill={inside ? "var(--bio)" : "var(--foreground)"}
+            fillOpacity={inside ? 0.9 : 0.75}
+          />
+        );
       })}
 
       {flow &&
@@ -42,7 +103,15 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
           const y2 = cy + Math.sin(a) * 125;
           return (
             <g key={k} opacity={values.gradient > 0 ? 0.85 : 0.2}>
-              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--warning)" strokeWidth="2.5" strokeLinecap="round" />
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke="var(--warning)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
               <circle cx={x2} cy={y2} r="3" fill="var(--warning)" />
             </g>
           );
@@ -50,10 +119,23 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
 
       {labels && (
         <g fontSize="12" fontWeight="600" fill="var(--muted-foreground)">
-          <text x={cx + 10} y={cy + 52} textAnchor="middle">{ar ? "النواة" : "Nucleus"}</text>
-          <text x="80" y="40">{ar ? "تركيز عالي برة" : "High concentration outside"}</text>
-          <text x={cx} y="355" textAnchor="middle">{ar ? "الغشاء البلازمي" : "Plasma membrane"}</text>
-          <text x="530" y="40" textAnchor="end" fontFamily="var(--font-mono)" fill="var(--bio)" fontWeight="700">
+          <text x={cx + 10} y={cy + 52} textAnchor="middle">
+            {ar ? "النواة" : "Nucleus"}
+          </text>
+          <text x="80" y="40">
+            {ar ? "تركيز عالي برة" : "High concentration outside"}
+          </text>
+          <text x={cx} y="355" textAnchor="middle">
+            {ar ? "الغشاء البلازمي" : "Plasma membrane"}
+          </text>
+          <text
+            x="530"
+            y="40"
+            textAnchor="end"
+            fontFamily="var(--font-mono)"
+            fill="var(--bio)"
+            fontWeight="700"
+          >
             J = {rate.toFixed(1)} µmol/s
           </text>
         </g>

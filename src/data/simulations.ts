@@ -130,9 +130,36 @@ export function computeOhm(voltage: number, resistance: number, temperature: num
 }
 
 const ohmVars: SimVariable[] = [
-  { key: "voltage", label: { ar: "الجهد", en: "Voltage" }, symbol: "V", unit: "V", min: 0, max: 24, step: 0.5, default: 12 },
-  { key: "resistance", label: { ar: "المقاومة", en: "Resistance" }, symbol: "R", unit: "Ω", min: 2, max: 50, step: 1, default: 10 },
-  { key: "temperature", label: { ar: "الحرارة", en: "Temperature" }, symbol: "T", unit: "°C", min: 0, max: 150, step: 1, default: 25 },
+  {
+    key: "voltage",
+    label: { ar: "الجهد", en: "Voltage" },
+    symbol: "V",
+    unit: "V",
+    min: 0,
+    max: 24,
+    step: 0.5,
+    default: 12,
+  },
+  {
+    key: "resistance",
+    label: { ar: "المقاومة", en: "Resistance" },
+    symbol: "R",
+    unit: "Ω",
+    min: 2,
+    max: 50,
+    step: 1,
+    default: 10,
+  },
+  {
+    key: "temperature",
+    label: { ar: "الحرارة", en: "Temperature" },
+    symbol: "T",
+    unit: "°C",
+    min: 0,
+    max: 150,
+    step: 1,
+    default: 25,
+  },
 ];
 
 const ohm: SimulationDef = {
@@ -142,9 +169,30 @@ const ohm: SimulationDef = {
   readouts: (v) => {
     const o = computeOhm(v.voltage, v.resistance, v.temperature);
     return [
-      { key: "current", label: { ar: "شدة التيار", en: "Current" }, symbol: "I", value: o.current, unit: "A", digits: 2 },
-      { key: "power", label: { ar: "القدرة", en: "Power" }, symbol: "P", value: o.power, unit: "W", digits: 1 },
-      { key: "rEff", label: { ar: "المقاومة الفعلية", en: "Effective R" }, symbol: "Rₜ", value: o.rEff, unit: "Ω", digits: 1 },
+      {
+        key: "current",
+        label: { ar: "شدة التيار", en: "Current" },
+        symbol: "I",
+        value: o.current,
+        unit: "A",
+        digits: 2,
+      },
+      {
+        key: "power",
+        label: { ar: "القدرة", en: "Power" },
+        symbol: "P",
+        value: o.power,
+        unit: "W",
+        digits: 1,
+      },
+      {
+        key: "rEff",
+        label: { ar: "المقاومة الفعلية", en: "Effective R" },
+        symbol: "Rₜ",
+        value: o.rEff,
+        unit: "Ω",
+        digits: 1,
+      },
     ];
   },
   graph: (v) => {
@@ -173,16 +221,31 @@ const ohm: SimulationDef = {
       ar: "يوسف بيشحن موبايله في أوضة حرّانة في عز أغسطس في القاهرة. الشاحن سخن جداً والشحن بقى أبطأ من العادي. هل الحرارة ليها علاقة بالتيار اللي ماشي في السلك؟ تعالى ندخل جوه السلك نفسه ونشوف.",
       en: "Youssef is charging his phone in a hot Cairo room in mid-August. The charger is burning hot and charging feels slower than usual. Could heat be affecting the current in the wire? Let's go inside the wire and find out.",
     },
-    question: { ar: "توقعك: لما السلك يسخن، التيار هيزيد ولا يقل؟", en: "Your guess: when the wire heats up, does current rise or fall?" },
+    question: {
+      ar: "توقعك: لما السلك يسخن، التيار هيزيد ولا يقل؟",
+      en: "Your guess: when the wire heats up, does current rise or fall?",
+    },
   },
   explain: [
-    { ar: "شدة التيار (I) بتتناسب طردياً مع فرق الجهد (V) لما المقاومة ثابتة.", en: "Current (I) is directly proportional to voltage (V) at constant resistance." },
-    { ar: "المقاومة (R) بتعرقل حركة الإلكترونات — كل ما تزيد، التيار يقل.", en: "Resistance (R) opposes electron flow — the higher it is, the lower the current." },
-    { ar: "الحرارة بتخلي أيونات الفلز تهتز أكتر، فتزيد التصادمات والمقاومة الفعلية.", en: "Heat makes metal ions vibrate more, increasing collisions and effective resistance." },
+    {
+      ar: "شدة التيار (I) بتتناسب طردياً مع فرق الجهد (V) لما المقاومة ثابتة.",
+      en: "Current (I) is directly proportional to voltage (V) at constant resistance.",
+    },
+    {
+      ar: "المقاومة (R) بتعرقل حركة الإلكترونات — كل ما تزيد، التيار يقل.",
+      en: "Resistance (R) opposes electron flow — the higher it is, the lower the current.",
+    },
+    {
+      ar: "الحرارة بتخلي أيونات الفلز تهتز أكتر، فتزيد التصادمات والمقاومة الفعلية.",
+      en: "Heat makes metal ions vibrate more, increasing collisions and effective resistance.",
+    },
   ],
   quiz: [
     {
-      prompt: { ar: "لو ضاعفنا المقاومة مع ثبات الجهد، شدة التيار…", en: "If resistance doubles at constant voltage, the current…" },
+      prompt: {
+        ar: "لو ضاعفنا المقاومة مع ثبات الجهد، شدة التيار…",
+        en: "If resistance doubles at constant voltage, the current…",
+      },
       options: [
         { ar: "تتضاعف", en: "Doubles" },
         { ar: "تقل للنصف", en: "Halves" },
@@ -190,21 +253,36 @@ const ohm: SimulationDef = {
         { ar: "تبقى صفر", en: "Drops to zero" },
       ],
       correct: 1,
-      explanation: { ar: "I = V ÷ R، فلما R تتضاعف التيار يقل للنصف.", en: "I = V ÷ R, so doubling R halves the current." },
+      explanation: {
+        ar: "I = V ÷ R، فلما R تتضاعف التيار يقل للنصف.",
+        en: "I = V ÷ R, so doubling R halves the current.",
+      },
       demo: { voltage: 12, resistance: 20, temperature: 25 },
-      demoNote: { ar: "المقاومة بقت 20Ω بدل 10Ω — بص على الأميتر: التيار نزل من 1.2A لـ 0.6A.", en: "Resistance is now 20Ω instead of 10Ω — watch the ammeter drop from 1.2A to 0.6A." },
+      demoNote: {
+        ar: "المقاومة بقت 20Ω بدل 10Ω — بص على الأميتر: التيار نزل من 1.2A لـ 0.6A.",
+        en: "Resistance is now 20Ω instead of 10Ω — watch the ammeter drop from 1.2A to 0.6A.",
+      },
     },
     {
-      prompt: { ar: "سلك معدني سخن من 25°C لـ 125°C والجهد ثابت. التيار هيعمل إيه؟", en: "A metal wire heats from 25°C to 125°C at constant voltage. What happens to current?" },
+      prompt: {
+        ar: "سلك معدني سخن من 25°C لـ 125°C والجهد ثابت. التيار هيعمل إيه؟",
+        en: "A metal wire heats from 25°C to 125°C at constant voltage. What happens to current?",
+      },
       options: [
         { ar: "يزيد لأن الإلكترونات أسرع", en: "Rises — electrons move faster" },
         { ar: "يقل لأن المقاومة زادت", en: "Falls — resistance increased" },
         { ar: "يفضل ثابت", en: "Stays constant" },
       ],
       correct: 1,
-      explanation: { ar: "الأيونات بتهتز أكتر، المقاومة الفعلية تزيد، والتيار يقل.", en: "Ions vibrate more, effective resistance rises, and current falls." },
+      explanation: {
+        ar: "الأيونات بتهتز أكتر، المقاومة الفعلية تزيد، والتيار يقل.",
+        en: "Ions vibrate more, effective resistance rises, and current falls.",
+      },
       demo: { voltage: 12, resistance: 10, temperature: 125 },
-      demoNote: { ar: "الحرارة دلوقتي 125°C — شوف الأيونات بتهتز إزاي في المنظور الجزيئي والتيار قل.", en: "Temperature is now 125°C — in the molecular view, ions vibrate harder and current falls." },
+      demoNote: {
+        ar: "الحرارة دلوقتي 125°C — شوف الأيونات بتهتز إزاي في المنظور الجزيئي والتيار قل.",
+        en: "Temperature is now 125°C — in the molecular view, ions vibrate harder and current falls.",
+      },
       demoView: "molecular",
     },
   ],
@@ -233,8 +311,20 @@ const ohm: SimulationDef = {
         const label = name ? name.label[lang] : change.key;
         const effect =
           change.key === "voltage"
-            ? up ? (ar ? "زقة أقوى، فالتيار زاد" : "a stronger push, so current rose") : (ar ? "زقة أضعف، فالتيار قل" : "a weaker push, so current fell")
-            : up ? (ar ? "عرقلة أكتر للإلكترونات، فالتيار قل" : "more obstruction, so current fell") : (ar ? "عرقلة أقل، فالتيار زاد" : "less obstruction, so current rose");
+            ? up
+              ? ar
+                ? "زقة أقوى، فالتيار زاد"
+                : "a stronger push, so current rose"
+              : ar
+                ? "زقة أضعف، فالتيار قل"
+                : "a weaker push, so current fell"
+            : up
+              ? ar
+                ? "عرقلة أكتر للإلكترونات، فالتيار قل"
+                : "more obstruction, so current fell"
+              : ar
+                ? "عرقلة أقل، فالتيار زاد"
+                : "less obstruction, so current rose";
         return ar
           ? `إنت غيّرت ${label} من ${f(change.from)} لـ ${f(change.to)}${name?.unit ?? ""}. ده معناه ${effect} — القراءة دلوقتي ${f(o.current, 2)}A.`
           : `You changed ${label} from ${f(change.from)} to ${f(change.to)}${name?.unit ?? ""}. That means ${effect} — reading is now ${f(o.current, 2)}A.`;
@@ -268,9 +358,36 @@ export function computeRate(temperature: number, concentration: number, catalyst
 }
 
 const rateVars: SimVariable[] = [
-  { key: "temperature", label: { ar: "الحرارة", en: "Temperature" }, symbol: "T", unit: "°C", min: 0, max: 100, step: 1, default: 25 },
-  { key: "concentration", label: { ar: "التركيز", en: "Concentration" }, symbol: "C", unit: "M", min: 0.1, max: 2, step: 0.1, default: 1 },
-  { key: "catalyst", label: { ar: "العامل الحفاز", en: "Catalyst" }, symbol: "cat", unit: "g", min: 0, max: 10, step: 0.5, default: 0 },
+  {
+    key: "temperature",
+    label: { ar: "الحرارة", en: "Temperature" },
+    symbol: "T",
+    unit: "°C",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 25,
+  },
+  {
+    key: "concentration",
+    label: { ar: "التركيز", en: "Concentration" },
+    symbol: "C",
+    unit: "M",
+    min: 0.1,
+    max: 2,
+    step: 0.1,
+    default: 1,
+  },
+  {
+    key: "catalyst",
+    label: { ar: "العامل الحفاز", en: "Catalyst" },
+    symbol: "cat",
+    unit: "g",
+    min: 0,
+    max: 10,
+    step: 0.5,
+    default: 0,
+  },
 ];
 
 const reactionRate: SimulationDef = {
@@ -280,9 +397,30 @@ const reactionRate: SimulationDef = {
   readouts: (v) => {
     const r = computeRate(v.temperature, v.concentration, v.catalyst);
     return [
-      { key: "rate", label: { ar: "سرعة التفاعل", en: "Reaction rate" }, symbol: "r", value: r.rate, unit: "mM/s", digits: 1 },
-      { key: "collisions", label: { ar: "معدل التصادم", en: "Collision freq." }, symbol: "Z", value: r.collisions, unit: "%", digits: 0 },
-      { key: "halfLife", label: { ar: "عمر النصف", en: "Half-life" }, symbol: "t½", value: r.halfLife, unit: "s", digits: 0 },
+      {
+        key: "rate",
+        label: { ar: "سرعة التفاعل", en: "Reaction rate" },
+        symbol: "r",
+        value: r.rate,
+        unit: "mM/s",
+        digits: 1,
+      },
+      {
+        key: "collisions",
+        label: { ar: "معدل التصادم", en: "Collision freq." },
+        symbol: "Z",
+        value: r.collisions,
+        unit: "%",
+        digits: 0,
+      },
+      {
+        key: "halfLife",
+        label: { ar: "عمر النصف", en: "Half-life" },
+        symbol: "t½",
+        value: r.halfLife,
+        unit: "s",
+        digits: 0,
+      },
     ];
   },
   graph: (v) => {
@@ -302,49 +440,87 @@ const reactionRate: SimulationDef = {
       yMax: niceCeil(maxY),
     };
   },
-  activity: (v) => clamp(Math.log2(computeRate(v.temperature, v.concentration, v.catalyst).rate / 5 + 1) / 6, 0.05, 1),
+  activity: (v) =>
+    clamp(
+      Math.log2(computeRate(v.temperature, v.concentration, v.catalyst).rate / 5 + 1) / 6,
+      0.05,
+      1,
+    ),
   formula: "r = k [A]",
   formulaLive: (v) => {
     const r = computeRate(v.temperature, v.concentration, v.catalyst);
     return `${f(r.rate)} mM/s = k × ${f(v.concentration)} M`;
   },
   story: {
-    title: { ar: "ليه الأكل بيبوظ أسرع برة التلاجة؟", en: "Why does food spoil faster outside the fridge?" },
+    title: {
+      ar: "ليه الأكل بيبوظ أسرع برة التلاجة؟",
+      en: "Why does food spoil faster outside the fridge?",
+    },
     body: {
       ar: "ماما سابت طبق الفول برة التلاجة في يوم حر، وبعد كام ساعة ريحته اتغيرت. نفس الطبق جوه التلاجة بيعيش أيام! الفرق كله في سرعة التفاعلات الكيميائية. تعالى نشوف الجزيئات وهي بتتصادم.",
       en: "Mom left a plate of foul out on a hot day and within hours it smelled off. In the fridge it lasts days! The difference is reaction rate. Let's watch the molecules collide.",
     },
-    question: { ar: "توقعك: رفع الحرارة 10 درجات بيأثر قد إيه على السرعة؟", en: "Your guess: how much does +10°C change the rate?" },
+    question: {
+      ar: "توقعك: رفع الحرارة 10 درجات بيأثر قد إيه على السرعة؟",
+      en: "Your guess: how much does +10°C change the rate?",
+    },
   },
   explain: [
-    { ar: "التفاعل بيحصل لما الجزيئات تتصادم بطاقة كافية (طاقة التنشيط).", en: "Reactions happen when molecules collide with enough energy (activation energy)." },
-    { ar: "زيادة الحرارة 10°C تقريباً بتضاعف سرعة التفاعل.", en: "Raising temperature by ~10°C roughly doubles the rate." },
-    { ar: "العامل الحفاز بيقلل طاقة التنشيط من غير ما يُستهلك.", en: "A catalyst lowers activation energy without being consumed." },
+    {
+      ar: "التفاعل بيحصل لما الجزيئات تتصادم بطاقة كافية (طاقة التنشيط).",
+      en: "Reactions happen when molecules collide with enough energy (activation energy).",
+    },
+    {
+      ar: "زيادة الحرارة 10°C تقريباً بتضاعف سرعة التفاعل.",
+      en: "Raising temperature by ~10°C roughly doubles the rate.",
+    },
+    {
+      ar: "العامل الحفاز بيقلل طاقة التنشيط من غير ما يُستهلك.",
+      en: "A catalyst lowers activation energy without being consumed.",
+    },
   ],
   quiz: [
     {
-      prompt: { ar: "لو رفعنا الحرارة من 25°C لـ 35°C، سرعة التفاعل تقريباً…", en: "Raising temperature from 25°C to 35°C roughly…" },
+      prompt: {
+        ar: "لو رفعنا الحرارة من 25°C لـ 35°C، سرعة التفاعل تقريباً…",
+        en: "Raising temperature from 25°C to 35°C roughly…",
+      },
       options: [
         { ar: "تتضاعف", en: "Doubles the rate" },
         { ar: "تزيد 10% بس", en: "Adds only 10%" },
         { ar: "تقل", en: "Lowers the rate" },
       ],
       correct: 0,
-      explanation: { ar: "قاعدة تقريبية: كل 10°C زيادة بتضاعف السرعة.", en: "Rule of thumb: every +10°C roughly doubles the rate." },
+      explanation: {
+        ar: "قاعدة تقريبية: كل 10°C زيادة بتضاعف السرعة.",
+        en: "Rule of thumb: every +10°C roughly doubles the rate.",
+      },
       demo: { temperature: 35, concentration: 1, catalyst: 0 },
-      demoNote: { ar: "الحرارة 35°C — لاحظ الفقاعات والتصادمات زادت للضعف تقريباً.", en: "Now at 35°C — bubbles and collisions roughly doubled." },
+      demoNote: {
+        ar: "الحرارة 35°C — لاحظ الفقاعات والتصادمات زادت للضعف تقريباً.",
+        en: "Now at 35°C — bubbles and collisions roughly doubled.",
+      },
     },
     {
-      prompt: { ar: "العامل الحفاز بيزود سرعة التفاعل لأنه…", en: "A catalyst speeds up a reaction because it…" },
+      prompt: {
+        ar: "العامل الحفاز بيزود سرعة التفاعل لأنه…",
+        en: "A catalyst speeds up a reaction because it…",
+      },
       options: [
         { ar: "بيُستهلك في التفاعل", en: "Gets consumed" },
         { ar: "بيقلل طاقة التنشيط", en: "Lowers activation energy" },
         { ar: "بيرفع الحرارة", en: "Raises temperature" },
       ],
       correct: 1,
-      explanation: { ar: "بيوفر طريق بديل بطاقة تنشيط أقل، وبيخرج من التفاعل زي ما دخل.", en: "It offers a lower-energy pathway and leaves unchanged." },
+      explanation: {
+        ar: "بيوفر طريق بديل بطاقة تنشيط أقل، وبيخرج من التفاعل زي ما دخل.",
+        en: "It offers a lower-energy pathway and leaves unchanged.",
+      },
       demo: { temperature: 25, concentration: 1, catalyst: 8 },
-      demoNote: { ar: "ضفنا 8g عامل حفاز والحرارة زي ما هي — السرعة زادت جامد.", en: "Added 8g of catalyst at the same temperature — the rate jumped." },
+      demoNote: {
+        ar: "ضفنا 8g عامل حفاز والحرارة زي ما هي — السرعة زادت جامد.",
+        en: "Added 8g of catalyst at the same temperature — the rate jumped.",
+      },
       demoView: "molecular",
     },
   ],
@@ -360,7 +536,10 @@ const reactionRate: SimulationDef = {
         ? `تخيل الجزيئات ناس في مول زحمة. كل ما الحرارة تزيد (دلوقتي ${f(v.temperature, 0)}°C) الناس بتجري أسرع وبتخبط في بعض أكتر وبقوة. وكل ما التركيز يزيد، المول بيزحم أكتر. النتيجة: سرعة التفاعل ${f(r.rate)} mM/s.`
         : `Picture molecules as people in a busy mall. Hotter (${f(v.temperature, 0)}°C) means faster, harder bumps; higher concentration means more crowding. Result: ${f(r.rate)} mM/s.`;
     if (intent === "why") {
-      if (!change) return ar ? "حرك أي متغير الأول وأنا أقولك القراءة اتغيرت ليه." : "Move a variable first and I'll explain the change.";
+      if (!change)
+        return ar
+          ? "حرك أي متغير الأول وأنا أقولك القراءة اتغيرت ليه."
+          : "Move a variable first and I'll explain the change.";
       const label = rateVars.find((x) => x.key === change.key)?.label[lang] ?? change.key;
       return ar
         ? `غيرت ${label} من ${f(change.from)} لـ ${f(change.to)}. ده غيّر عدد التصادمات الفعالة، فالسرعة بقت ${f(r.rate)} mM/s.`
@@ -374,7 +553,9 @@ const reactionRate: SimulationDef = {
       return ar
         ? "غلطة شائعة: إن العامل الحفاز بيُستهلك أو بيغير كمية النواتج. لا — هو بيسرّع الوصول بس."
         : "Common mistake: thinking a catalyst is consumed or changes product amount. It only speeds things up.";
-    return ar ? `في المشهد ده عمر النصف ${f(r.halfLife, 0)} ثانية. جرب تضيف عامل حفاز وشوفه بيقل.` : `Half-life here is ${f(r.halfLife, 0)}s. Add catalyst and watch it shrink.`;
+    return ar
+      ? `في المشهد ده عمر النصف ${f(r.halfLife, 0)} ثانية. جرب تضيف عامل حفاز وشوفه بيقل.`
+      : `Half-life here is ${f(r.halfLife, 0)}s. Add catalyst and watch it shrink.`;
   },
 };
 
@@ -390,9 +571,36 @@ export function computeDiffusion(temperature: number, gradient: number, permeabi
 }
 
 const diffVars: SimVariable[] = [
-  { key: "temperature", label: { ar: "الحرارة", en: "Temperature" }, symbol: "T", unit: "°C", min: 0, max: 60, step: 1, default: 37 },
-  { key: "gradient", label: { ar: "فرق التركيز", en: "Concentration gradient" }, symbol: "ΔC", unit: "%", min: 0, max: 100, step: 1, default: 50 },
-  { key: "permeability", label: { ar: "نفاذية الغشاء", en: "Permeability" }, symbol: "P", unit: "%", min: 0, max: 100, step: 1, default: 60 },
+  {
+    key: "temperature",
+    label: { ar: "الحرارة", en: "Temperature" },
+    symbol: "T",
+    unit: "°C",
+    min: 0,
+    max: 60,
+    step: 1,
+    default: 37,
+  },
+  {
+    key: "gradient",
+    label: { ar: "فرق التركيز", en: "Concentration gradient" },
+    symbol: "ΔC",
+    unit: "%",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 50,
+  },
+  {
+    key: "permeability",
+    label: { ar: "نفاذية الغشاء", en: "Permeability" },
+    symbol: "P",
+    unit: "%",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 60,
+  },
 ];
 
 const diffusion: SimulationDef = {
@@ -402,9 +610,30 @@ const diffusion: SimulationDef = {
   readouts: (v) => {
     const d = computeDiffusion(v.temperature, v.gradient, v.permeability);
     return [
-      { key: "rate", label: { ar: "معدل الانتشار", en: "Diffusion rate" }, symbol: "J", value: d.rate, unit: "µmol/s", digits: 1 },
-      { key: "crossing", label: { ar: "جزيئات عابرة", en: "Crossing" }, symbol: "n", value: d.crossing, unit: "/s", digits: 1 },
-      { key: "equilibrium", label: { ar: "زمن الاتزان", en: "Time to equilibrium" }, symbol: "tₑ", value: d.equilibrium, unit: "min", digits: 1 },
+      {
+        key: "rate",
+        label: { ar: "معدل الانتشار", en: "Diffusion rate" },
+        symbol: "J",
+        value: d.rate,
+        unit: "µmol/s",
+        digits: 1,
+      },
+      {
+        key: "crossing",
+        label: { ar: "جزيئات عابرة", en: "Crossing" },
+        symbol: "n",
+        value: d.crossing,
+        unit: "/s",
+        digits: 1,
+      },
+      {
+        key: "equilibrium",
+        label: { ar: "زمن الاتزان", en: "Time to equilibrium" },
+        symbol: "tₑ",
+        value: d.equilibrium,
+        unit: "min",
+        digits: 1,
+      },
     ];
   },
   graph: (v) => {
@@ -424,50 +653,84 @@ const diffusion: SimulationDef = {
       yMax: niceCeil(maxY),
     };
   },
-  activity: (v) => clamp(computeDiffusion(v.temperature, v.gradient, v.permeability).rate / 60, 0, 1),
+  activity: (v) =>
+    clamp(computeDiffusion(v.temperature, v.gradient, v.permeability).rate / 60, 0, 1),
   formula: "J = P · ΔC",
   formulaLive: (v) => {
     const d = computeDiffusion(v.temperature, v.gradient, v.permeability);
     return `${f(d.rate)} = ${f(v.permeability / 100, 2)} × ${f(v.gradient, 0)}%`;
   },
   story: {
-    title: { ar: "ليه ريحة الطعمية بتوصلك من أول الشارع؟", en: "Why can you smell ta'meya from down the street?" },
+    title: {
+      ar: "ليه ريحة الطعمية بتوصلك من أول الشارع؟",
+      en: "Why can you smell ta'meya from down the street?",
+    },
     body: {
       ar: "الصبح بدري ريحة الطعمية السخنة بتوصل لحد شباكك. الجزيئات بتتحرك من المكان الزحمة للمكان الفاضي — وده بالظبط اللي بيحصل عبر غشاء الخلية كل ثانية في جسمك.",
       en: "Early morning, the smell of hot ta'meya reaches your window. Molecules move from crowded to empty spaces — exactly what happens across your cell membranes every second.",
     },
-    question: { ar: "توقعك: لو فرق التركيز بقى صفر، الانتشار هيحصل؟", en: "Your guess: with zero gradient, does net diffusion happen?" },
+    question: {
+      ar: "توقعك: لو فرق التركيز بقى صفر، الانتشار هيحصل؟",
+      en: "Your guess: with zero gradient, does net diffusion happen?",
+    },
   },
   explain: [
-    { ar: "الانتشار: حركة الجزيئات من التركيز العالي للتركيز المنخفض بدون طاقة.", en: "Diffusion: molecules move from high to low concentration without energy." },
-    { ar: "كل ما فرق التركيز يزيد، معدل الانتشار يزيد (قانون فيك).", en: "A bigger gradient means faster diffusion (Fick's law)." },
-    { ar: "الحرارة ونفاذية الغشاء بيسرّعوا مرور الجزيئات.", en: "Temperature and membrane permeability speed molecules across." },
+    {
+      ar: "الانتشار: حركة الجزيئات من التركيز العالي للتركيز المنخفض بدون طاقة.",
+      en: "Diffusion: molecules move from high to low concentration without energy.",
+    },
+    {
+      ar: "كل ما فرق التركيز يزيد، معدل الانتشار يزيد (قانون فيك).",
+      en: "A bigger gradient means faster diffusion (Fick's law).",
+    },
+    {
+      ar: "الحرارة ونفاذية الغشاء بيسرّعوا مرور الجزيئات.",
+      en: "Temperature and membrane permeability speed molecules across.",
+    },
   ],
   quiz: [
     {
-      prompt: { ar: "لو فرق التركيز بين جانبي الغشاء بقى صفر…", en: "If the concentration gradient becomes zero…" },
+      prompt: {
+        ar: "لو فرق التركيز بين جانبي الغشاء بقى صفر…",
+        en: "If the concentration gradient becomes zero…",
+      },
       options: [
         { ar: "يتوقف صافي الانتشار", en: "Net diffusion stops" },
         { ar: "الانتشار يزيد", en: "Diffusion speeds up" },
         { ar: "الجزيئات تتحرك عكس الاتجاه", en: "Molecules reverse direction" },
       ],
       correct: 0,
-      explanation: { ar: "الجزيئات لسه بتتحرك، لكن عدد اللي داخل = اللي خارج، فالصافي صفر.", en: "Molecules still move, but in = out, so net flow is zero." },
+      explanation: {
+        ar: "الجزيئات لسه بتتحرك، لكن عدد اللي داخل = اللي خارج، فالصافي صفر.",
+        en: "Molecules still move, but in = out, so net flow is zero.",
+      },
       demo: { temperature: 37, gradient: 0, permeability: 60 },
-      demoNote: { ar: "فرق التركيز = صفر — لاحظ إن مفيش جزيئات بتعبر الغشاء بشكل صافي.", en: "Gradient is 0 — notice no net crossing through the membrane." },
+      demoNote: {
+        ar: "فرق التركيز = صفر — لاحظ إن مفيش جزيئات بتعبر الغشاء بشكل صافي.",
+        en: "Gradient is 0 — notice no net crossing through the membrane.",
+      },
       demoView: "molecular",
     },
     {
-      prompt: { ar: "رفع الحرارة من 37°C لـ 55°C بيخلي الانتشار…", en: "Raising temperature from 37°C to 55°C makes diffusion…" },
+      prompt: {
+        ar: "رفع الحرارة من 37°C لـ 55°C بيخلي الانتشار…",
+        en: "Raising temperature from 37°C to 55°C makes diffusion…",
+      },
       options: [
         { ar: "أبطأ", en: "Slower" },
         { ar: "أسرع", en: "Faster" },
         { ar: "زي ما هو", en: "Unchanged" },
       ],
       correct: 1,
-      explanation: { ar: "الجزيئات بتكتسب طاقة حركة أكبر فتتحرك أسرع.", en: "Molecules gain kinetic energy and move faster." },
+      explanation: {
+        ar: "الجزيئات بتكتسب طاقة حركة أكبر فتتحرك أسرع.",
+        en: "Molecules gain kinetic energy and move faster.",
+      },
       demo: { temperature: 55, gradient: 50, permeability: 60 },
-      demoNote: { ar: "الحرارة 55°C — شوف الجزيئات بتعبر أسرع.", en: "Now 55°C — molecules cross faster." },
+      demoNote: {
+        ar: "الحرارة 55°C — شوف الجزيئات بتعبر أسرع.",
+        en: "Now 55°C — molecules cross faster.",
+      },
     },
   ],
   context: (v, lang) =>
@@ -496,7 +759,9 @@ const diffusion: SimulationDef = {
       return ar
         ? "غلطة شائعة: إن الجزيئات بتقف لما يحصل اتزان. هي بتفضل تتحرك، بس الصافي بيبقى صفر."
         : "Common mistake: molecules stop at equilibrium. They keep moving — net flow is just zero.";
-    return ar ? `دلوقتي هيوصل للاتزان في حوالي ${f(d.equilibrium)} دقيقة.` : `Equilibrium in about ${f(d.equilibrium)} minutes.`;
+    return ar
+      ? `دلوقتي هيوصل للاتزان في حوالي ${f(d.equilibrium)} دقيقة.`
+      : `Equilibrium in about ${f(d.equilibrium)} minutes.`;
   },
 };
 

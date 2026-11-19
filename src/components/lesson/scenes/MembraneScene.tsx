@@ -31,33 +31,94 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
   };
 
   return (
-    <svg viewBox="0 0 600 380" className="h-full w-full" role="img" aria-label="Membrane diffusion simulation">
+    <svg
+      viewBox="0 0 600 380"
+      className="h-full w-full"
+      role="img"
+      aria-label="Membrane diffusion simulation"
+    >
       <rect x="20" y="30" width="560" height="320" rx="20" fill="none" stroke="var(--border)" />
-      <rect x="20" y="30" width={mx - 40} height="320" rx="20" fill="var(--bio)" fillOpacity={0.03 + values.gradient / 1500} />
+      <rect
+        x="20"
+        y="30"
+        width={mx - 40}
+        height="320"
+        rx="20"
+        fill="var(--bio)"
+        fillOpacity={0.03 + values.gradient / 1500}
+      />
 
       {/* Bilayer */}
       {heads.map((y) => (
         <g key={y}>
           <circle cx={mx - 14} cy={y} r="6" fill="var(--bio)" fillOpacity="0.8" />
           <circle cx={mx + 14} cy={y} r="6" fill="var(--bio)" fillOpacity="0.8" />
-          <line x1={mx - 8} y1={y - 2} x2={mx - 1} y2={y - 2} stroke="var(--bio)" strokeOpacity="0.5" />
-          <line x1={mx + 1} y1={y + 2} x2={mx + 8} y2={y + 2} stroke="var(--bio)" strokeOpacity="0.5" />
+          <line
+            x1={mx - 8}
+            y1={y - 2}
+            x2={mx - 1}
+            y2={y - 2}
+            stroke="var(--bio)"
+            strokeOpacity="0.5"
+          />
+          <line
+            x1={mx + 1}
+            y1={y + 2}
+            x2={mx + 8}
+            y2={y + 2}
+            stroke="var(--bio)"
+            strokeOpacity="0.5"
+          />
         </g>
       ))}
       {channelY.map((y) => (
         <g key={y}>
-          <rect x={mx - 22} y={y - 16} width="44" height="4" rx="2" fill="var(--warning)" opacity="0.8" />
-          <rect x={mx - 22} y={y + 12} width="44" height="4" rx="2" fill="var(--warning)" opacity="0.8" />
+          <rect
+            x={mx - 22}
+            y={y - 16}
+            width="44"
+            height="4"
+            rx="2"
+            fill="var(--warning)"
+            opacity="0.8"
+          />
+          <rect
+            x={mx - 22}
+            y={y + 12}
+            width="44"
+            height="4"
+            rx="2"
+            fill="var(--warning)"
+            opacity="0.8"
+          />
         </g>
       ))}
 
       {Array.from({ length: leftCount }, (_, i) => {
         const p = bounce(i, "l");
-        return <circle key={`l${i}`} cx={p.x} cy={p.y} r="5" fill="var(--foreground)" fillOpacity="0.8" />;
+        return (
+          <circle
+            key={`l${i}`}
+            cx={p.x}
+            cy={p.y}
+            r="5"
+            fill="var(--foreground)"
+            fillOpacity="0.8"
+          />
+        );
       })}
       {Array.from({ length: rightCount }, (_, i) => {
         const p = bounce(i, "r");
-        return <circle key={`r${i}`} cx={p.x} cy={p.y} r="5" fill="var(--foreground)" fillOpacity="0.8" />;
+        return (
+          <circle
+            key={`r${i}`}
+            cx={p.x}
+            cy={p.y}
+            r="5"
+            fill="var(--foreground)"
+            fillOpacity="0.8"
+          />
+        );
       })}
 
       {Array.from({ length: crossers }, (_, i) => {
@@ -70,24 +131,50 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
         if (x < mx - 30) y = sy + (ch - sy) * ((x - 60) / (mx - 90));
         else if (x > mx + 30) y = ch + (ey - ch) * ((x - mx - 30) / (540 - mx - 30));
         else y = ch;
-        return <circle key={`c${i}`} cx={x} cy={y} r="5.5" fill="var(--bio)" stroke="var(--foreground)" strokeOpacity="0.6" />;
+        return (
+          <circle
+            key={`c${i}`}
+            cx={x}
+            cy={y}
+            r="5.5"
+            fill="var(--bio)"
+            stroke="var(--foreground)"
+            strokeOpacity="0.6"
+          />
+        );
       })}
 
       {flow && values.gradient > 0 && channels > 0 && (
         <g>
           <line x1="230" y1="360" x2="370" y2="360" stroke="var(--warning)" strokeWidth="3" />
-          <path d="M 362 352 L 374 360 L 362 368" fill="none" stroke="var(--warning)" strokeWidth="3" />
+          <path
+            d="M 362 352 L 374 360 L 362 368"
+            fill="none"
+            stroke="var(--warning)"
+            strokeWidth="3"
+          />
         </g>
       )}
 
       {labels && (
         <g fontSize="12" fontWeight="600" fill="var(--muted-foreground)">
-          <text x="160" y="22" textAnchor="middle">{ar ? "تركيز عالي" : "High concentration"}</text>
-          <text x="445" y="22" textAnchor="middle">{ar ? "تركيز منخفض" : "Low concentration"}</text>
+          <text x="160" y="22" textAnchor="middle">
+            {ar ? "تركيز عالي" : "High concentration"}
+          </text>
+          <text x="445" y="22" textAnchor="middle">
+            {ar ? "تركيز منخفض" : "Low concentration"}
+          </text>
           <text x={mx} y="22" textAnchor="middle" fill="var(--warning)">
             {channels} {ar ? "قنوات" : "channels"}
           </text>
-          <text x="560" y="375" textAnchor="end" fontFamily="var(--font-mono)" fill="var(--bio)" fontWeight="700">
+          <text
+            x="560"
+            y="375"
+            textAnchor="end"
+            fontFamily="var(--font-mono)"
+            fill="var(--bio)"
+            fontWeight="700"
+          >
             {crossing.toFixed(1)} /s
           </text>
         </g>

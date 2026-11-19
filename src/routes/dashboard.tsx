@@ -33,10 +33,16 @@ export const Route = createFileRoute("/dashboard")({
   }),
   head: () => ({
     meta: [
-      { title: "لوحة المنهج — ScienceVerse" },
-      { name: "description", content: "Your ScienceVerse curriculum dashboard: units, lessons, mastery, XP and daily streak." },
-      { property: "og:title", content: "Curriculum Dashboard — ScienceVerse" },
-      { property: "og:description", content: "Track mastery across biology, physics and chemistry units." },
+      { title: "لوحة المنهج — LabX" },
+      {
+        name: "description",
+        content: "Your LabX curriculum dashboard: units, lessons, mastery, XP and daily streak.",
+      },
+      { property: "og:title", content: "Curriculum Dashboard — LabX" },
+      {
+        property: "og:description",
+        content: "Track mastery across biology, physics and chemistry units.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -57,7 +63,8 @@ function Dashboard() {
   const subject = subjects.find((s) => s.id === subjectId) ?? subjects[1]!;
   const mastery = subjectMastery(units);
   const nextLesson =
-    units.flatMap((u) => u.lessons).find((x) => x.mastery > 0 && x.mastery < 85) ?? units[0]!.lessons[0]!;
+    units.flatMap((u) => u.lessons).find((x) => x.mastery > 0 && x.mastery < 85) ??
+    units[0]!.lessons[0]!;
 
   const setSearch = (patch: DashboardSearch) =>
     navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true, resetScroll: false });
@@ -76,7 +83,11 @@ function Dashboard() {
         <DashboardTopBar grade={grade} onGrade={(g) => setSearch({ grade: g })} />
 
         {/* Subject tabs */}
-        <div role="tablist" aria-label={ar ? "المواد" : "Subjects"} className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
+        <div
+          role="tablist"
+          aria-label={ar ? "المواد" : "Subjects"}
+          className="mt-6 grid grid-cols-3 gap-2 sm:gap-3"
+        >
           {subjects.map((s) => {
             const active = s.id === subjectId;
             const m = subjectMastery(curriculum[grade][s.id]);
@@ -97,10 +108,18 @@ function Dashboard() {
               >
                 <span className="text-2xl sm:text-3xl">{s.emoji}</span>
                 <span className="min-w-0 flex-1">
-                  <span className={"block text-sm font-bold sm:text-base " + (active ? "text-subject" : "")}>{l(s.name)}</span>
+                  <span
+                    className={
+                      "block text-sm font-bold sm:text-base " + (active ? "text-subject" : "")
+                    }
+                  >
+                    {l(s.name)}
+                  </span>
                   <span className="block font-mono text-[11px] text-muted-foreground">{m}%</span>
                 </span>
-                {active && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-subject" />}
+                {active && (
+                  <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-subject" />
+                )}
               </button>
             );
           })}
@@ -128,11 +147,15 @@ function Dashboard() {
                     <SubjectIcon subject={subjectId} className="size-4 text-subject" />
                     {l(subject.name)}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{ar ? "متوسط الإتقان في المادة" : "Average subject mastery"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {ar ? "متوسط الإتقان في المادة" : "Average subject mastery"}
+                  </p>
                 </div>
               </div>
               <div className="relative mt-5 rounded-2xl border border-subject/25 bg-background/50 p-4">
-                <p className="text-[11px] font-semibold text-subject">{ar ? "كمّل من مكان ما وقفت" : "Pick up where you left off"}</p>
+                <p className="text-[11px] font-semibold text-subject">
+                  {ar ? "كمّل من مكان ما وقفت" : "Pick up where you left off"}
+                </p>
                 <p className="mt-1 font-bold">{l(nextLesson.title)}</p>
                 <Button asChild variant="subject" className="mt-3 w-full rounded-full">
                   <Link to="/lesson" search={{ id: nextLesson.id }}>

@@ -31,20 +31,49 @@ export function ParticleBoxScene({ t, values, labels, flow }: SceneProps) {
       const b = pts[j]!;
       const dx = a.x - b.x;
       const dy = a.y - b.y;
-      if (dx * dx + dy * dy < threshold * threshold) sparks.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      if (dx * dx + dy * dy < threshold * threshold)
+        sparks.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
     }
   }
 
   return (
-    <svg viewBox="0 0 600 380" className="h-full w-full" role="img" aria-label="Molecular collision simulation">
-      <rect x={L} y={T} width={Wd} height={Ht} rx="18" fill="var(--chem)" fillOpacity="0.05" stroke="var(--chem)" strokeOpacity="0.4" />
+    <svg
+      viewBox="0 0 600 380"
+      className="h-full w-full"
+      role="img"
+      aria-label="Molecular collision simulation"
+    >
+      <rect
+        x={L}
+        y={T}
+        width={Wd}
+        height={Ht}
+        rx="18"
+        fill="var(--chem)"
+        fillOpacity="0.05"
+        stroke="var(--chem)"
+        strokeOpacity="0.4"
+      />
       {values.catalyst > 0 && (
-        <rect x={L + 4} y={T + Ht - 10} width={Wd - 8} height="6" rx="3" fill="var(--warning)" opacity={0.25 + values.catalyst * 0.06} />
+        <rect
+          x={L + 4}
+          y={T + Ht - 10}
+          width={Wd - 8}
+          height="6"
+          rx="3"
+          fill="var(--warning)"
+          opacity={0.25 + values.catalyst * 0.06}
+        />
       )}
       {sparks.map((s, i) => (
         <g key={i}>
           <circle cx={s.x} cy={s.y} r="16" fill="var(--warning)" opacity="0.25" />
-          <path d={`M ${s.x - 8} ${s.y} L ${s.x + 8} ${s.y} M ${s.x} ${s.y - 8} L ${s.x} ${s.y + 8}`} stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d={`M ${s.x - 8} ${s.y} L ${s.x + 8} ${s.y} M ${s.x} ${s.y - 8} L ${s.x} ${s.y + 8}`}
+            stroke="var(--warning)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </g>
       ))}
       {pts.map((p, i) =>
@@ -55,18 +84,42 @@ export function ParticleBoxScene({ t, values, labels, flow }: SceneProps) {
         ),
       )}
       {flow &&
-        pts.slice(0, 6).map((p, i) => (
-          <line key={i} x1={p.x} y1={p.y} x2={p.x + (rand(i, 21) > 0.5 ? 1 : -1) * speed * 60} y2={p.y} stroke="var(--chem)" strokeOpacity="0.6" strokeWidth="2" />
-        ))}
+        pts
+          .slice(0, 6)
+          .map((p, i) => (
+            <line
+              key={i}
+              x1={p.x}
+              y1={p.y}
+              x2={p.x + (rand(i, 21) > 0.5 ? 1 : -1) * speed * 60}
+              y2={p.y}
+              stroke="var(--chem)"
+              strokeOpacity="0.6"
+              strokeWidth="2"
+            />
+          ))}
       {labels && (
         <g fontSize="12" fontWeight="600" fill="var(--muted-foreground)">
           <circle cx="60" cy="25" r="7" fill="var(--chem)" />
-          <text x="74" y="29">{ar ? "جزيئات A" : "Molecules A"}</text>
+          <text x="74" y="29">
+            {ar ? "جزيئات A" : "Molecules A"}
+          </text>
           <circle cx="170" cy="25" r="5" fill="var(--foreground)" />
-          <text x="182" y="29">{ar ? "جزيئات B" : "Molecules B"}</text>
+          <text x="182" y="29">
+            {ar ? "جزيئات B" : "Molecules B"}
+          </text>
           <circle cx="290" cy="25" r="7" fill="var(--warning)" opacity="0.5" />
-          <text x="302" y="29">{ar ? "تصادم فعّال" : "Effective collision"}</text>
-          <text x="550" y="355" textAnchor="end" fontFamily="var(--font-mono)" fill="var(--warning)" fontWeight="700">
+          <text x="302" y="29">
+            {ar ? "تصادم فعّال" : "Effective collision"}
+          </text>
+          <text
+            x="550"
+            y="355"
+            textAnchor="end"
+            fontFamily="var(--font-mono)"
+            fill="var(--warning)"
+            fontWeight="700"
+          >
             {sparks.length} {ar ? "تصادم الآن" : "collisions now"}
           </text>
         </g>

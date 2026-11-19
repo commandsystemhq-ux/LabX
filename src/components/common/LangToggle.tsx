@@ -18,7 +18,9 @@ export function LangToggle() {
           aria-pressed={lang === code}
           className={
             "rounded-full px-2.5 py-1 transition-colors " +
-            (lang === code ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")
+            (lang === code
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground")
           }
         >
           {code === "ar" ? "ع" : "EN"}

@@ -62,7 +62,10 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
     setTyping(true);
     timer.current = window.setTimeout(() => {
       const { values: v, lastChange: c, lang: lg } = live.current;
-      setMessages((m) => [...m, { id: idRef.current++, role: "tutor", text: sim.tutor(intent, v, lg, c) }]);
+      setMessages((m) => [
+        ...m,
+        { id: idRef.current++, role: "tutor", text: sim.tutor(intent, v, lg, c) },
+      ]);
       setTyping(false);
     }, 900);
   };
@@ -103,7 +106,9 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
           </span>
           <div className="flex-1">
             <p className="font-bold">{t("aiTutor")}</p>
-            <p className="text-[11px] text-muted-foreground">{lang === "ar" ? "فاهم المشهد اللي قدامك" : "Context-aware"}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {lang === "ar" ? "فاهم المشهد اللي قدامك" : "Context-aware"}
+            </p>
           </div>
           <button
             type="button"
@@ -119,14 +124,18 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
           <div className="flex items-start gap-2 rounded-xl border border-subject/30 bg-subject/10 px-3 py-2 text-xs">
             <MapPin className="mt-0.5 size-3.5 shrink-0 text-subject" />
             <span>
-              <span className="font-bold text-subject">{t("currentScene")}:</span> {sim.context(values, lang)}
+              <span className="font-bold text-subject">{t("currentScene")}:</span>{" "}
+              {sim.context(values, lang)}
             </span>
           </div>
         </div>
 
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
           {messages.map((m) => (
-            <div key={m.id} className={"flex " + (m.role === "student" ? "justify-end" : "justify-start")}>
+            <div
+              key={m.id}
+              className={"flex " + (m.role === "student" ? "justify-end" : "justify-start")}
+            >
               <p
                 className={
                   "max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed " +

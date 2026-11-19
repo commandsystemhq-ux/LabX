@@ -17,8 +17,24 @@ export function LatticeScene({ t, values, labels, flow }: SceneProps) {
   const height = 220;
 
   return (
-    <svg viewBox="0 0 600 380" className="h-full w-full" role="img" aria-label="Metal lattice simulation">
-      <rect x={left - 20} y={top - 30} width={width + 40} height={height + 60} rx="40" fill="var(--phys)" fillOpacity="0.04" stroke="var(--phys)" strokeOpacity="0.35" strokeDasharray="4 6" />
+    <svg
+      viewBox="0 0 600 380"
+      className="h-full w-full"
+      role="img"
+      aria-label="Metal lattice simulation"
+    >
+      <rect
+        x={left - 20}
+        y={top - 30}
+        width={width + 40}
+        height={height + 60}
+        rx="40"
+        fill="var(--phys)"
+        fillOpacity="0.04"
+        stroke="var(--phys)"
+        strokeOpacity="0.35"
+        strokeDasharray="4 6"
+      />
 
       {/* Ions */}
       {Array.from({ length: cols * rows }, (_, i) => {
@@ -30,8 +46,25 @@ export function LatticeScene({ t, values, labels, flow }: SceneProps) {
         const y = by + Math.cos(t * 11 + i * 2.3) * amp;
         return (
           <g key={i}>
-            <circle cx={x} cy={y} r="13" fill={`color-mix(in oklab, var(--heat) ${Math.round((values.temperature / 150) * 70)}%, var(--muted))`} stroke="var(--foreground)" strokeOpacity="0.25" />
-            <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--foreground)" fillOpacity="0.7">+</text>
+            <circle
+              cx={x}
+              cy={y}
+              r="13"
+              fill={`color-mix(in oklab, var(--heat) ${Math.round((values.temperature / 150) * 70)}%, var(--muted))`}
+              stroke="var(--foreground)"
+              strokeOpacity="0.25"
+            />
+            <text
+              x={x}
+              y={y + 4}
+              textAnchor="middle"
+              fontSize="12"
+              fontWeight="700"
+              fill="var(--foreground)"
+              fillOpacity="0.7"
+            >
+              +
+            </text>
           </g>
         );
       })}
@@ -46,8 +79,20 @@ export function LatticeScene({ t, values, labels, flow }: SceneProps) {
       {flow && (
         <g opacity={current > 0.01 ? 1 : 0.3}>
           <line x1="200" y1="345" x2="400" y2="345" stroke="var(--phys)" strokeWidth="3" />
-          <path d="M 392 335 L 408 345 L 392 355" fill="none" stroke="var(--phys)" strokeWidth="3" />
-          <text x="300" y="335" textAnchor="middle" fontSize="12" fill="var(--phys)" fontWeight="700">
+          <path
+            d="M 392 335 L 408 345 L 392 355"
+            fill="none"
+            stroke="var(--phys)"
+            strokeWidth="3"
+          />
+          <text
+            x="300"
+            y="335"
+            textAnchor="middle"
+            fontSize="12"
+            fill="var(--phys)"
+            fontWeight="700"
+          >
             {ar ? "انجراف الإلكترونات" : "electron drift"}
           </text>
         </g>
@@ -55,11 +100,29 @@ export function LatticeScene({ t, values, labels, flow }: SceneProps) {
 
       {labels && (
         <g fontSize="12" fontWeight="600">
-          <circle cx="60" cy="28" r="7" fill="var(--muted)" stroke="var(--foreground)" strokeOpacity="0.3" />
-          <text x="74" y="32" fill="var(--muted-foreground)">{ar ? "أيونات موجبة (بتهتز مع الحرارة)" : "Positive ions (vibrate with heat)"}</text>
+          <circle
+            cx="60"
+            cy="28"
+            r="7"
+            fill="var(--muted)"
+            stroke="var(--foreground)"
+            strokeOpacity="0.3"
+          />
+          <text x="74" y="32" fill="var(--muted-foreground)">
+            {ar ? "أيونات موجبة (بتهتز مع الحرارة)" : "Positive ions (vibrate with heat)"}
+          </text>
           <circle cx="60" cy="50" r="4.5" fill="var(--phys)" />
-          <text x="74" y="54" fill="var(--muted-foreground)">{ar ? "إلكترونات حرة" : "Free electrons"}</text>
-          <text x="540" y="40" textAnchor="end" fontFamily="var(--font-mono)" fill="var(--heat)" fontWeight="700">
+          <text x="74" y="54" fill="var(--muted-foreground)">
+            {ar ? "إلكترونات حرة" : "Free electrons"}
+          </text>
+          <text
+            x="540"
+            y="40"
+            textAnchor="end"
+            fontFamily="var(--font-mono)"
+            fill="var(--heat)"
+            fontWeight="700"
+          >
             T = {values.temperature.toFixed(0)}°C
           </text>
         </g>

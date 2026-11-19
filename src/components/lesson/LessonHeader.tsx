@@ -1,5 +1,14 @@
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Check, ChevronLeft, ChevronRight, FlaskConical, MonitorPlay, Presentation, Target } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FlaskConical,
+  MonitorPlay,
+  Presentation,
+  Target,
+} from "lucide-react";
 import type { LessonLookup } from "@/data/mockCurriculum";
 import { useLang, type UiKey } from "@/lib/i18n";
 
@@ -26,12 +35,23 @@ export function LessonHeader({ lookup, step, maxStep, onStep, onBoard }: Props) 
     <header className="glass rounded-3xl p-4 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            <Link to="/dashboard" search={{ grade: lookup.grade.id }} className="hover:text-foreground">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+          >
+            <Link
+              to="/dashboard"
+              search={{ grade: lookup.grade.id }}
+              className="hover:text-foreground"
+            >
               {t("dashboard")}
             </Link>
             <Sep className="size-3" />
-            <Link to="/dashboard" search={{ grade: lookup.grade.id, subject: lookup.subject.id }} className="hover:text-foreground">
+            <Link
+              to="/dashboard"
+              search={{ grade: lookup.grade.id, subject: lookup.subject.id }}
+              className="hover:text-foreground"
+            >
               {lookup.subject.emoji} {l(lookup.subject.name)}
             </Link>
             <Sep className="size-3" />
@@ -77,18 +97,36 @@ export function LessonHeader({ lookup, step, maxStep, onStep, onBoard }: Props) 
                 <span
                   className={
                     "flex size-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold " +
-                    (active ? "bg-subject text-primary-foreground" : complete ? "bg-subject/20 text-subject" : "bg-muted text-muted-foreground")
+                    (active
+                      ? "bg-subject text-primary-foreground"
+                      : complete
+                        ? "bg-subject/20 text-subject"
+                        : "bg-muted text-muted-foreground")
                   }
                 >
                   {complete && !active ? <Check className="size-3.5" /> : n}
                 </span>
                 <span className="flex flex-col">
-                  <span className={"text-xs font-bold sm:text-sm " + (active ? "text-subject" : "")}>{t(s.key)}</span>
+                  <span
+                    className={"text-xs font-bold sm:text-sm " + (active ? "text-subject" : "")}
+                  >
+                    {t(s.key)}
+                  </span>
                 </span>
-                <Icon className={"ms-auto hidden size-4 md:block " + (active ? "text-subject" : "text-muted-foreground")} />
+                <Icon
+                  className={
+                    "ms-auto hidden size-4 md:block " +
+                    (active ? "text-subject" : "text-muted-foreground")
+                  }
+                />
               </button>
               {i < STEPS.length - 1 && (
-                <span className={"hidden h-0.5 w-4 shrink-0 rounded-full sm:block " + (n < step ? "bg-subject" : "bg-border")} />
+                <span
+                  className={
+                    "hidden h-0.5 w-4 shrink-0 rounded-full sm:block " +
+                    (n < step ? "bg-subject" : "bg-border")
+                  }
+                />
               )}
             </li>
           );

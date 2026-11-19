@@ -1,4 +1,5 @@
 import { Bot, Sparkles } from "lucide-react";
+import { LogoMark } from "@/components/brand/Logo";
 import { SubjectIcon } from "@/components/common/SubjectIcon";
 import { useLang } from "@/lib/i18n";
 
@@ -32,7 +33,7 @@ export function HeroOrbit() {
       {/* Core */}
       <div className="absolute inset-[40%] flex items-center justify-center rounded-full glass-strong">
         <div className="absolute inset-0 rounded-full bg-gradient-brand opacity-25" />
-        <span className="relative font-display text-2xl font-bold text-gradient-brand sm:text-3xl">3D</span>
+        <LogoMark className="relative h-[42%] w-[62%] drop-shadow-[0_0_18px_color-mix(in_oklab,var(--phys)_55%,transparent)]" />
       </div>
 
       {/* Floating cards */}
@@ -40,7 +41,9 @@ export function HeroOrbit() {
         className="glass absolute -left-2 top-[8%] animate-float rounded-2xl px-3.5 py-2.5 sm:left-0"
         data-subject="physics"
       >
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">live</p>
+        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          live
+        </p>
         <p className="font-mono text-sm font-bold text-subject">I = 1.20 A</p>
       </div>
 

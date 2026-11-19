@@ -26,7 +26,9 @@ export function Hero() {
     {
       icon: Wallet,
       title: ar ? "باقات في متناول الكل" : "Affordable plans",
-      sub: ar ? `للطالب ${STUDENT_PRICE_EGP} ج.م/شهر • باقات للمدارس` : `Students ${STUDENT_PRICE_EGP} EGP/mo • School plans`,
+      sub: ar
+        ? `للطالب ${STUDENT_PRICE_EGP} ج.م/شهر • باقات للمدارس`
+        : `Students ${STUDENT_PRICE_EGP} EGP/mo • School plans`,
       tone: "chemistry",
     },
   ] as const;
@@ -38,7 +40,9 @@ export function Hero() {
         <div className="animate-fade-up">
           <span className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground">
             <span className="size-1.5 animate-blink rounded-full bg-bio" />
-            {ar ? "مطابق لمنهج وزارة التربية والتعليم — المرحلة الثانوية" : "Aligned with the Egyptian Ministry curriculum — Secondary stage"}
+            {ar
+              ? "مطابق لمنهج وزارة التربية والتعليم — المرحلة الثانوية"
+              : "Aligned with the Egyptian Ministry curriculum — Secondary stage"}
           </span>
 
           <h1 className="mt-6 font-display text-4xl font-black leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl">

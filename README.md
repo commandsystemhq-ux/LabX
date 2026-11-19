@@ -1,24 +1,27 @@
-# Screenshot Exact Match
+# LabX — لاب إكس
 
-Implement exactly the screenshot and nothing else
+Interactive 3D science learning platform for Egyptian / MENA K-12 schools (Biology, Physics, Chemistry) with a context-aware AI tutor.
 
-This project was built with [Lovable](https://lovable.dev).
+Frontend only: React 19, TanStack Start, Tailwind CSS v4, Recharts, Lucide. All content is mock data in `src/data`.
 
-## Build with Lovable
+## Views
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/7dc70c65-d210-4e58-afe1-a598e9518530).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- `/` Landing page
+- `/dashboard` Curriculum dashboard (grades, XP, streak, subject tabs, mastery)
+- `/lesson` Lesson & simulation workspace (4-step flow, live graph, AI tutor, quiz, teacher board mode)
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm install
+npm run dev      # start dev server
+npm test         # vitest
+npm run lint
+npm run build
 ```
+
+## Adding Three.js
+
+`src/components/lesson/SimulationStage.tsx` contains a `TODO: Mount Three.js Canvas here` marker. The current SVG/HTML scenes in `src/components/lesson/scenes` are drop-in placeholders.
+
+Brand assets live in `public/` (`logo-mark.png`, `favicon.ico`, `icon-*.png`, `og-image.png`).

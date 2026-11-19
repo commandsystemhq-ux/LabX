@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computeDiffusion, computeOhm, computeRate, defaultsOf, simulations } from "@/data/simulations";
+import {
+  computeDiffusion,
+  computeOhm,
+  computeRate,
+  defaultsOf,
+  simulations,
+} from "@/data/simulations";
 import { findLesson, STUDENT_PRICE_EGP } from "@/data/mockCurriculum";
 
 describe("Ohm's law model", () => {

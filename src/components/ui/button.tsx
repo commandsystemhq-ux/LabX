@@ -18,7 +18,8 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         hero: "bg-gradient-brand text-primary-foreground font-bold shadow-[var(--shadow-glow)] hover:brightness-110 hover:-translate-y-0.5 transition-all",
         glass: "glass text-foreground hover:bg-accent/60",
-        subject: "bg-subject text-primary-foreground font-semibold shadow-[var(--shadow-glow)] hover:brightness-110",
+        subject:
+          "bg-subject text-primary-foreground font-semibold shadow-[var(--shadow-glow)] hover:brightness-110",
         "subject-soft": "bg-subject/12 text-subject border border-subject/30 hover:bg-subject/20",
       },
       size: {

@@ -1,4 +1,4 @@
-# ScienceVerse roadmap
+# LabX roadmap
 
 - [ ] Design system (dark space navy, subject accents, Cairo fonts)
 - [ ] AR/EN language toggle with RTL default

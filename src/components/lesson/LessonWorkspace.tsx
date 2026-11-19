@@ -1,7 +1,14 @@
 import { Minimize2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LessonLookup } from "@/data/mockCurriculum";
-import { defaultsOf, simulations, type QuizQuestion, type SimKey, type SimValues, type ValueChange } from "@/data/simulations";
+import {
+  defaultsOf,
+  simulations,
+  type QuizQuestion,
+  type SimKey,
+  type SimValues,
+  type ValueChange,
+} from "@/data/simulations";
 import { useLang } from "@/lib/i18n";
 import { AITutorDrawer } from "./AITutorDrawer";
 import { ControlPanel } from "./ControlPanel";
@@ -40,7 +47,8 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
 
   const onChange = (key: SimKey, value: number) => {
     setValues((prev) => {
-      if (!dragStart.current || dragStart.current.key !== key) dragStart.current = { key, from: prev[key] };
+      if (!dragStart.current || dragStart.current.key !== key)
+        dragStart.current = { key, from: prev[key] };
       return { ...prev, [key]: value };
     });
   };
@@ -62,7 +70,12 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const seeMistake = (q: QuizQuestion) => {
     const keys = Object.keys(q.demo) as SimKey[];
     const changed = keys.find((k) => q.demo[k] !== undefined && q.demo[k] !== values[k]);
-    if (changed) setLastChange({ key: changed, from: values[changed], to: q.demo[changed] ?? values[changed] });
+    if (changed)
+      setLastChange({
+        key: changed,
+        from: values[changed],
+        to: q.demo[changed] ?? values[changed],
+      });
     setValues({ ...values, ...q.demo });
     if (q.demoView) setView(q.demoView);
     setPlaying(true);
@@ -123,11 +136,21 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <LessonHeader lookup={lookup} step={step} maxStep={maxStep} onStep={setStep} onBoard={enterBoard} />
+      <LessonHeader
+        lookup={lookup}
+        step={step}
+        maxStep={maxStep}
+        onStep={setStep}
+        onBoard={enterBoard}
+      />
 
       <div
         ref={boardRef}
-        className={board ? "fixed inset-0 z-[60] flex flex-col gap-3 bg-background p-3 sm:p-4" : "grid gap-4 lg:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]"}
+        className={
+          board
+            ? "fixed inset-0 z-[60] flex flex-col gap-3 bg-background p-3 sm:p-4"
+            : "grid gap-4 lg:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]"
+        }
       >
         {board ? (
           <>
@@ -161,7 +184,13 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
       </div>
 
       {!board && (
-        <AITutorDrawer open={tutorOpen} onOpenChange={setTutorOpen} sim={sim} values={values} lastChange={lastChange} />
+        <AITutorDrawer
+          open={tutorOpen}
+          onOpenChange={setTutorOpen}
+          sim={sim}
+          values={values}
+          lastChange={lastChange}
+        />
       )}
     </div>
   );

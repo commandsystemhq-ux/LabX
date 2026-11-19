@@ -17,10 +17,20 @@ export function WeeklyActivity() {
       <div className="mt-4 h-28" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={lang === "ar" ? [...data].reverse() : data}>
-            <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
+            <XAxis
+              dataKey="day"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            />
             <Tooltip
               cursor={{ fill: "var(--accent)" }}
-              contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
+              contentStyle={{
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                fontSize: 12,
+              }}
               labelStyle={{ color: "var(--foreground)" }}
             />
             <Bar dataKey="minutes" fill="var(--subject)" radius={[6, 6, 2, 2]} />

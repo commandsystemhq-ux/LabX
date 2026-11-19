@@ -62,10 +62,18 @@ export function StageToolbar(p: Props) {
           onValueChange={([v]) => p.onSpeed(v ?? 1)}
           aria-label={t("speed")}
         />
-        <span className="w-9 font-mono text-[11px] font-bold text-subject">{p.speed.toFixed(2).replace(/0$/, "")}×</span>
+        <span className="w-9 font-mono text-[11px] font-bold text-subject">
+          {p.speed.toFixed(2).replace(/0$/, "")}×
+        </span>
       </div>
 
-      <button type="button" className={iconBtn} onClick={p.onReset} aria-label={t("reset")} title={t("reset")}>
+      <button
+        type="button"
+        className={iconBtn}
+        onClick={p.onReset}
+        aria-label={t("reset")}
+        title={t("reset")}
+      >
         <RotateCcw className="size-4" />
       </button>
 
@@ -83,7 +91,10 @@ export function StageToolbar(p: Props) {
         {layersOpen && (
           <div className="glass-strong absolute bottom-full z-20 mb-2 w-52 animate-fade-up rounded-xl p-1.5 start-1/2 -translate-x-1/2 rtl:translate-x-1/2">
             {(["labels", "flow"] as const).map((k) => (
-              <label key={k} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent">
+              <label
+                key={k}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent"
+              >
                 {t(k === "labels" ? "labelsLayer" : "flowLayer")}
                 <input
                   type="checkbox"
@@ -112,7 +123,9 @@ export function StageToolbar(p: Props) {
               onClick={() => p.onView(v)}
               className={
                 "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all " +
-                (active ? "bg-subject text-primary-foreground" : "text-muted-foreground hover:text-foreground")
+                (active
+                  ? "bg-subject text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground")
               }
             >
               <Icon className="size-3.5" />
