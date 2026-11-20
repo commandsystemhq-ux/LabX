@@ -104,6 +104,7 @@ const ask = (patch: Partial<AskTutorInput> = {}): AskTutorInput => ({
   question: "ليه التيار قل؟",
   intent: "why",
   lang: "ar",
+  page: "lesson",
   simId: "ohm",
   step: 2,
   mode: "guided",
@@ -144,7 +145,7 @@ describe("prompt + provider calls", () => {
     expect(text).toBe("hi");
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(
-      "https://bedrock-runtime.eu-west-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse",
+      "https://bedrock-runtime.eu-west-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse",
     );
     expect((init.headers as Record<string, string>)["authorization"]).toBe("Bearer key-123456");
     expect(init.redirect).toBe("error");
@@ -180,6 +181,18 @@ describe("prompt + provider calls", () => {
     expect(err).toBeInstanceOf(ProviderError);
     expect(String(err.message)).not.toContain("secret");
     expect(err.status).toBe(403);
+    // The provider text is kept as redacted `detail` for the admin test button only.
+    expect(err.detail).toBe("secret endpoint details");
+
+    const echoing = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: "bad token key-123456" }), { status: 401 }),
+    );
+    const redacted = await callBedrock(cfg, prompts, echoing as unknown as typeof fetch).catch(
+      (e) => e,
+    );
+    expect(redacted.detail).toBe("bad token ***");
+    expect(redacted.detail).not.toContain("key-123456");
 
     const empty = vi.fn(async () => Response.json({ output: { message: { content: [] } } }));
     await expect(
@@ -404,7 +417,13 @@ describe("client AI wrapper", () => {
     errorMode: false,
     guided: null,
   };
-  const base = { sim, ctx, question: "why?", intent: "why" as const };
+  const base = {
+    lesson: { sim, ctx },
+    page: { page: "lesson" as const, scene: "" },
+    lang: "en" as const,
+    question: "why?",
+    intent: "why" as const,
+  };
 
   it("returns null without a session and never calls the server", async () => {
     resetAiBackoff();
@@ -434,5 +453,108 @@ describe("client AI wrapper", () => {
     resetAiBackoff();
     const fn = vi.fn().mockRejectedValue(new Error("offline"));
     expect(await requestAiReply({ ...base, accessToken: TOKEN("student"), ask: fn })).toBeNull();
+  });
+});
+
+describe("Noor outside a lesson (page context, no simulation)", () => {
+  const page = { page: "dashboard" as const, grade: "g12" as const, scene: "Dashboard • Grade 12" };
+  const general = {
+    question: "what should I study?",
+    intent: "general" as const,
+    lang: "ar" as const,
+    page,
+  };
+
+  it("sends only the page context and reports why it fell back", async () => {
+    resetAiBackoff();
+    const fn = vi.fn().mockResolvedValue({ ok: true, text: "نور" });
+    expect(await requestAiReply({ ...general, accessToken: TOKEN("student"), ask: fn })).toBe(
+      "نور",
+    );
+    const data = fn.mock.calls[0]![0].data as AskTutorInput;
+    expect(data).toMatchObject({ page: "dashboard", grade: "g12", scene: "Dashboard • Grade 12" });
+    expect(data.simId).toBeUndefined();
+    expect(data.step).toBeUndefined();
+
+    const reasons: string[] = [];
+    expect(
+      await requestAiReply({
+        ...general,
+        accessToken: null,
+        ask: fn,
+        onFallback: (r) => reasons.push(r),
+      }),
+    ).toBeNull();
+    fn.mockResolvedValueOnce({ ok: false, reason: "error" });
+    await requestAiReply({
+      ...general,
+      accessToken: TOKEN("student"),
+      ask: fn,
+      onFallback: (r) => reasons.push(r),
+    });
+    expect(reasons).toEqual(["auth", "error"]);
+  });
+
+  it("the prompt names Noor, lists the lesson catalog and keeps lesson fields out", () => {
+    const p = buildPrompts(
+      ask({
+        page: "dashboard",
+        grade: "g12",
+        simId: undefined,
+        step: undefined,
+        mode: undefined,
+        view: undefined,
+        scene: "Dashboard",
+      }),
+    );
+    expect(p.system).toContain("Noor");
+    expect(p.system).toContain("g12-physics-u1-l2 | physics:");
+    expect(p.system).not.toContain("g10-physics-u1-l1 |");
+    expect(p.system).toContain("not inside a lesson");
+    expect(p.user).not.toContain("<simulation>");
+    expect(p.user).toContain("<page>dashboard</page>");
+  });
+});
+
+describe("AI service: connection test", () => {
+  const cfg = { ...BEDROCK, apiKey: "bedrock-key-123456" };
+  const setup = async (fetchImpl: typeof fetch) => {
+    const m = memoryStore(USERS);
+    const svc = createAiService({ store: m.store, encryptionKey: KEY, fetchImpl });
+    return { m, svc };
+  };
+
+  it("is admin-only and reports 'not configured' before anything is saved", async () => {
+    const { svc } = await setup(okFetch());
+    expect(await svc.adminTest(TOKEN("student"))).toEqual({ ok: false, reason: "forbidden" });
+    const r = await svc.adminTest(TOKEN("admin"));
+    expect(r).toEqual({
+      ok: true,
+      data: { ok: false, reason: "not_configured", provider: "bedrock" },
+    });
+  });
+
+  it("works with a good provider and shows the real (redacted) error otherwise", async () => {
+    const good = await setup(okFetch());
+    await good.svc.adminSave(save({ bedrock: cfg }));
+    const ok = await good.svc.adminTest(TOKEN("admin"));
+    expect(ok.ok && ok.data.ok).toBe(true);
+    expect(good.m.usage.request_count).toBe(0); // a test never counts as student usage
+
+    const denied = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: "Access denied for key bedrock-key-123456" }), {
+          status: 403,
+        }),
+    ) as unknown as typeof fetch;
+    const bad = await setup(denied);
+    await bad.svc.adminSave(save({ bedrock: cfg }));
+    const r = await bad.svc.adminTest(TOKEN("admin"));
+    expect(r).toMatchObject({
+      ok: true,
+      data: { ok: false, reason: "provider_error", provider: "bedrock", status: 403 },
+    });
+    expect(JSON.stringify(r)).toContain("Access denied for key ***");
+    expect(JSON.stringify(r)).not.toContain("bedrock-key-123456");
   });
 });

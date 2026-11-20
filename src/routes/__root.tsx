@@ -11,6 +11,8 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { NoorAssistant } from "@/components/noor/NoorAssistant";
+import { NoorProvider } from "@/components/noor/NoorProvider";
 import { AuthProvider } from "@/lib/auth";
 import { LanguageProvider } from "@/lib/i18n";
 
@@ -127,7 +129,10 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
         <AuthProvider>
-          <Outlet />
+          <NoorProvider>
+            <Outlet />
+            <NoorAssistant />
+          </NoorProvider>
         </AuthProvider>
       </LanguageProvider>
     </QueryClientProvider>

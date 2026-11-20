@@ -25,7 +25,7 @@ export interface TutorContext {
 export const MAX_QUESTION_LENGTH = 300;
 
 /** Light Arabic normalisation so keyword matching survives hamza / ya / ta-marbuta variants. */
-function normalise(text: string) {
+export function normalise(text: string) {
   return text
     .toLowerCase()
     .replace(/[\u064B-\u0652\u0640]/g, "")

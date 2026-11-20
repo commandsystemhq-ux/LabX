@@ -8,6 +8,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LessonWorkspace } from "@/components/lesson/LessonWorkspace";
 import { findLesson } from "@/data/mockCurriculum";
+import { NoorAssistant } from "@/components/noor/NoorAssistant";
+import { NoorProvider } from "@/components/noor/NoorProvider";
 import { LanguageProvider } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
 
@@ -16,9 +18,12 @@ async function mountLesson(id: string) {
   const rootRoute = createRootRoute({
     component: () => (
       <LanguageProvider>
-        <div data-subject={lookup.subject.id}>
-          <LessonWorkspace lookup={lookup} />
-        </div>
+        <NoorProvider>
+          <div data-subject={lookup.subject.id}>
+            <LessonWorkspace lookup={lookup} />
+          </div>
+          <NoorAssistant />
+        </NoorProvider>
       </LanguageProvider>
     ),
   });
@@ -59,7 +64,7 @@ describe("LessonWorkspace (all three subjects)", () => {
       0,
     );
     expect(screen.getAllByRole("listitem").length).toBeGreaterThan(3);
-    expect(screen.getAllByRole("button", { name: "المعلم الذكي" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "نور" }).length).toBeGreaterThan(0);
   });
 
   it("guided discovery gates the next step until the goal is reached", async () => {

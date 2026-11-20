@@ -11,9 +11,14 @@ import {
   bedrockInput,
   DEFAULT_AZURE_API_VERSION,
   type AiProvider,
+  type AiTestResult,
   type PublicAiSettings,
 } from "@/lib/ai-config";
-import { adminGetAiSettingsFn, adminSaveAiSettingsFn } from "@/lib/ai-tutor.functions";
+import {
+  adminGetAiSettingsFn,
+  adminSaveAiSettingsFn,
+  adminTestAiFn,
+} from "@/lib/ai-tutor.functions";
 import { useAuth } from "@/lib/auth";
 import { useLang, type UiKey } from "@/lib/i18n";
 
@@ -67,12 +72,13 @@ function toForm(s: PublicAiSettings): Form {
   };
 }
 
-const BEDROCK_REGIONS = ["us-east-1", "us-west-2", "eu-central-1", "eu-west-1", "ap-southeast-1"];
-const BEDROCK_MODELS = [
-  "anthropic.claude-3-haiku-20240307-v1:0",
-  "anthropic.claude-3-5-sonnet-20240620-v1:0",
-  "anthropic.claude-3-opus-20240229-v1:0",
-];
+/** Plain free-text entry: no suggestion lists, no browser autofill / autocorrect on these fields. */
+const freeText = {
+  autoComplete: "off",
+  autoCapitalize: "off",
+  autoCorrect: "off",
+  spellCheck: false,
+} as const;
 
 function AdminPage() {
   const { t, lang } = useLang();
@@ -83,6 +89,8 @@ function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; key: UiKey } | null>(null);
   const [badFields, setBadFields] = useState<string[]>([]);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<AiTestResult | null>(null);
 
   const isAdmin = user?.isAdmin === true;
 
@@ -188,6 +196,25 @@ function AdminPage() {
       setNotice({ tone: "error", key: "adminErrGeneric" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Tries the saved settings of the active provider and shows its real (redacted) error. */
+  const runTest = async () => {
+    if (testing || !settings) return;
+    setTesting(true);
+    setTest(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("no session");
+      const res = await adminTestAiFn({ data: { accessToken } });
+      if (res.ok) setTest(res.data);
+      else if (res.reason === "forbidden" || res.reason === "auth") setLoad("forbidden");
+      else setTest({ ok: false, reason: "provider_error", provider: settings.activeProvider });
+    } catch {
+      setTest({ ok: false, reason: "provider_error", provider: settings.activeProvider });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -302,18 +329,12 @@ function AdminPage() {
                   <Input
                     id="br-region"
                     dir="ltr"
-                    list="br-regions"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={30}
                     value={form.bedrockRegion}
                     onChange={(e) => set("bedrockRegion", e.target.value)}
                     aria-invalid={bad("bedrockregion")}
                   />
-                  <datalist id="br-regions">
-                    {BEDROCK_REGIONS.map((r) => (
-                      <option key={r} value={r} />
-                    ))}
-                  </datalist>
                 </Field>
                 <Field
                   id="br-model"
@@ -324,18 +345,12 @@ function AdminPage() {
                   <Input
                     id="br-model"
                     dir="ltr"
-                    list="br-models"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={200}
                     value={form.bedrockModel}
                     onChange={(e) => set("bedrockModel", e.target.value)}
                     aria-invalid={bad("bedrockmodelId")}
                   />
-                  <datalist id="br-models">
-                    {BEDROCK_MODELS.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
                 </Field>
                 <Field
                   id="br-key"
@@ -375,7 +390,7 @@ function AdminPage() {
                     id="az-endpoint"
                     type="url"
                     dir="ltr"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={200}
                     value={form.azureEndpoint}
                     onChange={(e) => set("azureEndpoint", e.target.value)}
@@ -390,7 +405,7 @@ function AdminPage() {
                   <Input
                     id="az-deployment"
                     dir="ltr"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={64}
                     value={form.azureDeployment}
                     onChange={(e) => set("azureDeployment", e.target.value)}
@@ -405,7 +420,7 @@ function AdminPage() {
                   <Input
                     id="az-version"
                     dir="ltr"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={20}
                     value={form.azureVersion}
                     onChange={(e) => set("azureVersion", e.target.value)}
@@ -416,7 +431,7 @@ function AdminPage() {
                   <Input
                     id="az-region"
                     dir="ltr"
-                    autoComplete="off"
+                    {...freeText}
                     maxLength={40}
                     value={form.azureRegion}
                     onChange={(e) => set("azureRegion", e.target.value)}
@@ -485,14 +500,62 @@ function AdminPage() {
               </p>
             )}
 
-            <Button
-              type="submit"
-              variant="hero"
-              className="self-start rounded-full px-6"
-              disabled={saving || !settings.serverReady}
-            >
-              {saving ? t("adminSaving") : t("adminSave")}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="submit"
+                variant="hero"
+                className="rounded-full px-6"
+                disabled={saving || !settings.serverReady}
+              >
+                {saving ? t("adminSaving") : t("adminSave")}
+              </Button>
+              <Button
+                type="button"
+                variant="glass"
+                className="rounded-full px-6"
+                disabled={testing || saving || !settings.serverReady}
+                onClick={() => void runTest()}
+              >
+                {testing ? t("adminTesting") : t("adminTest")}
+              </Button>
+              <p className="text-[11px] text-muted-foreground">{t("adminTestHint")}</p>
+            </div>
+
+            {test && (
+              <div
+                role={test.ok ? "status" : "alert"}
+                className={
+                  "rounded-2xl border p-3 text-sm " +
+                  (test.ok ? "border-bio/40 bg-bio/10" : "border-destructive/40 bg-destructive/10")
+                }
+              >
+                {test.ok ? (
+                  <p>
+                    {t("adminTestOk")}{" "}
+                    <span className="font-mono text-xs" dir="ltr">
+                      {test.provider} · {test.ms} ms
+                    </span>
+                  </p>
+                ) : test.reason === "not_configured" ? (
+                  <p>{t("adminTestNotConfigured")}</p>
+                ) : (
+                  <div>
+                    <p className="font-bold">
+                      {t("adminTestFail")}{" "}
+                      <span className="font-mono text-xs" dir="ltr">
+                        {test.provider}
+                        {test.status ? ` · HTTP ${test.status}` : ""}
+                      </span>
+                    </p>
+                    {test.detail && (
+                      <p className="mt-1 break-words font-mono text-xs" dir="ltr">
+                        {test.detail}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         )}
       </main>

@@ -7,22 +7,29 @@ import { adminAccessInput, askTutorInput, saveSettingsInput } from "./ai-config"
  */
 
 export const askAiTutorFn = createServerFn({ method: "POST" })
-  .inputValidator(askTutorInput)
+  .validator(askTutorInput)
   .handler(async ({ data }) => {
     const { getAiService } = await import("./ai/store.server");
     return getAiService().ask(data);
   });
 
 export const adminGetAiSettingsFn = createServerFn({ method: "POST" })
-  .inputValidator(adminAccessInput)
+  .validator(adminAccessInput)
   .handler(async ({ data }) => {
     const { getAiService } = await import("./ai/store.server");
     return getAiService().adminGet(data.accessToken);
   });
 
 export const adminSaveAiSettingsFn = createServerFn({ method: "POST" })
-  .inputValidator(saveSettingsInput)
+  .validator(saveSettingsInput)
   .handler(async ({ data }) => {
     const { getAiService } = await import("./ai/store.server");
     return getAiService().adminSave(data);
+  });
+
+export const adminTestAiFn = createServerFn({ method: "POST" })
+  .validator(adminAccessInput)
+  .handler(async ({ data }) => {
+    const { getAiService } = await import("./ai/store.server");
+    return getAiService().adminTest(data.accessToken);
   });

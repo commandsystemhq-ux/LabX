@@ -98,25 +98,34 @@ export const TUTOR_INTENTS = [
   "free",
   "hint",
   "hazard",
+  "general",
 ] as const;
 
-/** Scene context built by the client from local data. Treated as untrusted text by the server. */
+export const NOOR_PAGES = ["home", "dashboard", "lesson", "auth", "admin", "other"] as const;
+export type NoorPageId = (typeof NOOR_PAGES)[number];
+
+/**
+ * What Noor knows about where the student is. Built by the client from local data and treated as
+ * untrusted text by the server. Lesson-only fields are absent outside a lesson.
+ */
 export const askTutorInput = z.object({
   accessToken,
   question: z.string().trim().min(1).max(MAX_QUESTION),
   intent: z.enum(TUTOR_INTENTS),
   lang: z.enum(["ar", "en"]),
-  simId: z.enum(["ohm", "reaction-rate", "diffusion"]),
-  step: z.number().int().min(1).max(4),
-  mode: z.enum(["guided", "free"]),
-  view: z.enum(["macro", "molecular"]),
+  page: z.enum(NOOR_PAGES),
+  grade: z.enum(["g10", "g11", "g12"]).optional(),
+  subject: z.enum(["biology", "physics", "chemistry"]).optional(),
+  simId: z.enum(["ohm", "reaction-rate", "diffusion"]).optional(),
+  step: z.number().int().min(1).max(4).optional(),
+  mode: z.enum(["guided", "free"]).optional(),
+  view: z.enum(["macro", "molecular"]).optional(),
   scene: z.string().max(600),
   hazards: z.array(z.string().max(240)).max(3),
   errorMode: z.boolean(),
   task: z.string().max(300).optional(),
 });
 export type AskTutorInput = z.infer<typeof askTutorInput>;
-
 export type AskTutorResult =
   { ok: true; text: string } | { ok: false; reason: "disabled" | "auth" | "rate" | "error" };
 
@@ -142,6 +151,17 @@ export interface PublicAiSettings {
   /** False when the server is missing its encryption key, so nothing can be saved yet. */
   serverReady: boolean;
 }
+
+/** Result of the admin's Test connection button: the real provider error, for the admin only. */
+export type AiTestResult =
+  | { ok: true; provider: AiProvider; ms: number }
+  | {
+      ok: false;
+      reason: "not_configured" | "provider_error";
+      provider: AiProvider;
+      status?: number;
+      detail?: string;
+    };
 
 export type AdminResult<T> =
   | { ok: true; data: T }

@@ -3,6 +3,7 @@ import {
   bedrockStored,
   type AdminResult,
   type AiProvider,
+  type AiTestResult,
   type AskTutorInput,
   type AskTutorResult,
   type AzureConfig,
@@ -11,7 +12,7 @@ import {
   type SaveSettingsInput,
 } from "@/lib/ai-config";
 import { decryptJson, encryptJson, isValidEncryptionKey } from "./crypto.server";
-import { buildPrompts, callAzure, callBedrock } from "./providers.server";
+import { buildPrompts, callAzure, callBedrock, ProviderError } from "./providers.server";
 
 /** AI tutor business logic. All I/O goes through `AiStore`, so it can be tested without Supabase. */
 
@@ -159,7 +160,9 @@ export function createAiService(deps: AiServiceDeps) {
           await store.recordUsage(provider, true).catch(() => {});
           return { ok: true, text };
         } catch (error) {
-          console.error("AI tutor provider error", provider, (error as { status?: number }).status);
+          const e = error instanceof ProviderError ? error : null;
+          // `detail` is redacted and truncated; the key itself is never logged.
+          console.error("AI tutor provider error", provider, e?.status ?? "-", e?.detail ?? "");
           await store.recordUsage(provider, false).catch(() => {});
           return { ok: false, reason: "error" };
         }
@@ -179,6 +182,47 @@ export function createAiService(deps: AiServiceDeps) {
       }
     },
 
+    /** Runs one tiny request through the active provider and reports the real error to the admin. */
+    async adminTest(accessToken: string): Promise<AdminResult<AiTestResult>> {
+      const gate = await requireAdmin(accessToken);
+      if ("reason" in gate) return { ok: false, reason: gate.reason };
+      try {
+        const row = await store.loadSettings();
+        const provider = row.active_provider;
+        const config =
+          provider === "bedrock"
+            ? await readConfig<BedrockConfig>(row, "bedrock", bedrockStored)
+            : await readConfig<AzureConfig>(row, "azure", azureStored);
+        if (!config) {
+          return { ok: true, data: { ok: false, reason: "not_configured", provider } };
+        }
+
+        const prompts = { system: "Reply with the single word OK.", user: "ping" };
+        const started = now();
+        try {
+          if (provider === "bedrock") {
+            await callBedrock(config as BedrockConfig, prompts, deps.fetchImpl);
+          } else {
+            await callAzure(config as AzureConfig, prompts, deps.fetchImpl);
+          }
+          return { ok: true, data: { ok: true, provider, ms: now() - started } };
+        } catch (error) {
+          const e = error instanceof ProviderError ? error : null;
+          return {
+            ok: true,
+            data: {
+              ok: false,
+              reason: "provider_error",
+              provider,
+              ...(e?.status !== undefined ? { status: e.status } : {}),
+              ...(e?.detail ? { detail: e.detail } : {}),
+            },
+          };
+        }
+      } catch {
+        return { ok: false, reason: "error" };
+      }
+    },
     async adminSave(input: SaveSettingsInput): Promise<AdminResult<PublicAiSettings>> {
       const gate = await requireAdmin(input.accessToken);
       if ("reason" in gate) return { ok: false, reason: gate.reason };

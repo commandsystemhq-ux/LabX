@@ -12,11 +12,11 @@ import {
   type SimValues,
   type ValueChange,
 } from "@/data/simulations";
-import { buildIdleHint, type ControlMode } from "@/data/tutor";
+import { buildIdleHint, type ControlMode, type TutorContext } from "@/data/tutor";
+import { useNoorControl, useNoorOpen } from "@/components/noor/NoorProvider";
 import { useLang } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
 import { useProgress } from "@/lib/use-progress";
-import { AITutorDrawer } from "./AITutorDrawer";
 import { ControlPanel } from "./ControlPanel";
 import { GuidedDiscovery } from "./GuidedDiscovery";
 import { IdleHintCard } from "./IdleHintCard";
@@ -50,7 +50,9 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const [layers, setLayers] = useState<StageLayers>(() => lessonLayers(sim.id, preset));
   const [resetKey, setResetKey] = useState(0);
   const [demo, setDemo] = useState<DemoInfo | null>(null);
-  const [tutorOpen, setTutorOpen] = useState(false);
+  // Noor lives at the app root; this page only tells it what is on screen.
+  const tutorOpen = useNoorOpen();
+  const { setOpen: setTutorOpen, setLesson: setNoorLesson } = useNoorControl();
   const [board, setBoard] = useState(false);
   const [lastChange, setLastChange] = useState<ValueChange | null>(null);
   const [mode, setMode] = useState<ControlMode>("guided");
@@ -61,13 +63,41 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const guided = useGuided(sx.guided, values);
   const hazards = useMemo(() => sx.hazards(values), [sx, values]);
 
-  const tutorGuided = guided.current
-    ? { index: guided.index, total: guided.total, step: guided.current, done: guided.done }
-    : null;
+  const {
+    current: guidedCurrent,
+    index: guidedIndex,
+    total: guidedTotal,
+    done: guidedDone,
+  } = guided;
+  const tutorGuided = useMemo<TutorContext["guided"]>(
+    () =>
+      guidedCurrent
+        ? { index: guidedIndex, total: guidedTotal, step: guidedCurrent, done: guidedDone }
+        : null,
+    [guidedCurrent, guidedIndex, guidedTotal, guidedDone],
+  );
+  const tutorCtx = useMemo<TutorContext>(
+    () => ({
+      lang,
+      values,
+      change: lastChange,
+      step,
+      mode,
+      view,
+      hazards,
+      errorMode,
+      guided: tutorGuided,
+    }),
+    [lang, values, lastChange, step, mode, view, hazards, errorMode, tutorGuided],
+  );
+
+  useEffect(() => {
+    setNoorLesson({ lessonId, sim, ctx: tutorCtx, hidden: board });
+  }, [setNoorLesson, lessonId, sim, tutorCtx, board]);
+  useEffect(() => () => setNoorLesson(null), [setNoorLesson]);
 
   // A fresh object whenever the student does something; the idle timer restarts on each one.
   const quizState = quiz.state;
-  const { index: guidedIndex, done: guidedDone } = guided;
   const idleActivity = useMemo(
     () => ({
       values,
@@ -88,19 +118,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
     enabled: step !== 3 && !board && !tutorOpen && !(step === 4 && quiz.state.done),
     activity: idleActivity,
   });
-  const idleText = idle.visible
-    ? buildIdleHint(sim, {
-        lang,
-        values,
-        change: lastChange,
-        step,
-        mode,
-        view,
-        hazards,
-        errorMode,
-        guided: tutorGuided,
-      })
-    : null;
+  const idleText = idle.visible ? buildIdleHint(sim, tutorCtx) : null;
 
   const dragStart = useRef<{ key: SimKey; from: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -326,22 +344,6 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
           </>
         )}
       </div>
-
-      {!board && (
-        <AITutorDrawer
-          open={tutorOpen}
-          onOpenChange={setTutorOpen}
-          sim={sim}
-          values={values}
-          lastChange={lastChange}
-          step={step}
-          mode={mode}
-          view={view}
-          hazards={hazards}
-          errorMode={errorMode}
-          guided={tutorGuided}
-        />
-      )}
 
       {!board && idleText && (
         <IdleHintCard

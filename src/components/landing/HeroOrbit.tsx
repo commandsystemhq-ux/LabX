@@ -53,7 +53,7 @@ export function HeroOrbit() {
       >
         <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-bio">
           <Bot className="size-3.5" />
-          {lang === "ar" ? "المعلم الذكي" : "AI Tutor"}
+          {lang === "ar" ? "نور" : "Noor"}
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
           {lang === "ar"
