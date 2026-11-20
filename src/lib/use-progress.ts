@@ -11,11 +11,11 @@ export function useProgress(): ProgressState {
   );
 }
 
-/** Resolver that merges seeded (mock) mastery with the learner's stored results. */
+/** Resolver returning the learner's stored mastery for a lesson (0 until they finish its quiz). */
 export function useMastery() {
   const progress = useProgress();
   return useCallback(
-    (lesson: Pick<Lesson, "id" | "mastery">) => effectiveMastery(progress, lesson),
+    (lesson: Pick<Lesson, "id">) => effectiveMastery(progress, lesson),
     [progress],
   );
 }

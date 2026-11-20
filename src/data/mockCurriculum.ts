@@ -1,4 +1,5 @@
 import type { L10n } from "@/lib/i18n";
+import type { SimKey } from "./simulations";
 
 /**
  * Mock curriculum for LabX (Egyptian secondary stage, Ministry-aligned topics).
@@ -24,14 +25,21 @@ export interface Subject {
   simulationId: SimulationId;
 }
 
+/** Per-lesson starting setup for the shared subject simulation (free lab / guided / reset). */
+export interface SimPreset {
+  /** Overrides of the simulation's default variable values (clamped to each variable's range). */
+  values?: Partial<Record<SimKey, number>>;
+  /** Stage perspective the lesson opens with. */
+  view?: "macro" | "molecular";
+}
+
 export interface Lesson {
   id: string;
   title: L10n;
   minutes: number;
-  /** 0–100 */
-  mastery: number;
   xp: number;
   simulationId: SimulationId;
+  preset?: SimPreset;
 }
 
 export interface Unit {
@@ -100,20 +108,20 @@ const SIM: Record<SubjectId, SimulationId> = {
   chemistry: "reaction-rate",
 };
 
-type LessonSeed = [ar: string, en: string, minutes: number, mastery: number];
+type LessonSeed = [ar: string, en: string, minutes: number, preset?: SimPreset];
 type UnitSeed = { title: L10n; lessons: LessonSeed[] };
 
 function build(grade: GradeId, subject: SubjectId, units: UnitSeed[]): Unit[] {
   return units.map((u, ui) => ({
     id: `${grade}-${subject}-u${ui + 1}`,
     title: u.title,
-    lessons: u.lessons.map(([ar, en, minutes, mastery], li) => ({
+    lessons: u.lessons.map(([ar, en, minutes, preset], li) => ({
       id: `${grade}-${subject}-u${ui + 1}-l${li + 1}`,
       title: { ar, en },
       minutes,
-      mastery,
       xp: minutes * 5,
       simulationId: SIM[subject],
+      ...(preset ? { preset } : {}),
     })),
   }));
 }
@@ -124,15 +132,20 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "الأساس الكيميائي للحياة", en: "Chemical Basis of Life" },
         lessons: [
-          ["الماء وأهميته للكائن الحي", "Water and living organisms", 18, 88],
-          ["الكربوهيدرات والدهون", "Carbohydrates and lipids", 22, 61],
+          ["الماء وأهميته للكائن الحي", "Water and living organisms", 18],
+          ["الكربوهيدرات والدهون", "Carbohydrates and lipids", 22],
         ],
       },
       {
         title: { ar: "الخلية: وحدة البناء", en: "The Cell: Unit of Life" },
         lessons: [
-          ["الغشاء البلازمي والنقل عبره", "Plasma membrane transport", 25, 34],
-          ["الانتشار والأسموزية", "Diffusion and osmosis", 20, 0],
+          [
+            "الغشاء البلازمي والنقل عبره",
+            "Plasma membrane transport",
+            25,
+            { values: { gradient: 80 } },
+          ],
+          ["الانتشار والأسموزية", "Diffusion and osmosis", 20],
         ],
       },
     ]),
@@ -140,15 +153,15 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "القياس الفيزيائي", en: "Physical Measurement" },
         lessons: [
-          ["الكميات الفيزيائية ووحداتها", "Physical quantities and units", 15, 92],
-          ["أخطاء القياس", "Measurement errors", 18, 70],
+          ["الكميات الفيزيائية ووحداتها", "Physical quantities and units", 15],
+          ["أخطاء القياس", "Measurement errors", 18],
         ],
       },
       {
         title: { ar: "الكهربية في حياتنا", en: "Electricity Around Us" },
         lessons: [
-          ["الدائرة الكهربية البسيطة", "The simple circuit", 20, 40],
-          ["شدة التيار وفرق الجهد", "Current and potential difference", 24, 8],
+          ["الدائرة الكهربية البسيطة", "The simple circuit", 20],
+          ["شدة التيار وفرق الجهد", "Current and potential difference", 24],
         ],
       },
     ]),
@@ -156,15 +169,15 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "المادة وتركيبها", en: "Matter and Its Structure" },
         lessons: [
-          ["تركيب الذرة", "Atomic structure", 20, 80],
-          ["الجدول الدوري", "The periodic table", 22, 55],
+          ["تركيب الذرة", "Atomic structure", 20],
+          ["الجدول الدوري", "The periodic table", 22],
         ],
       },
       {
         title: { ar: "التفاعلات الكيميائية", en: "Chemical Reactions" },
         lessons: [
-          ["أنواع التفاعلات", "Types of reactions", 18, 25],
-          ["العوامل المؤثرة على سرعة التفاعل", "Factors affecting reaction rate", 24, 0],
+          ["أنواع التفاعلات", "Types of reactions", 18],
+          ["العوامل المؤثرة على سرعة التفاعل", "Factors affecting reaction rate", 24],
         ],
       },
     ]),
@@ -174,15 +187,20 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "التغذية والهضم", en: "Nutrition and Digestion" },
         lessons: [
-          ["الإنزيمات وعملها", "Enzymes in action", 22, 65],
-          ["الامتصاص في الأمعاء", "Absorption in the intestine", 20, 30],
+          ["الإنزيمات وعملها", "Enzymes in action", 22],
+          ["الامتصاص في الأمعاء", "Absorption in the intestine", 20],
         ],
       },
       {
         title: { ar: "النقل في الكائنات الحية", en: "Transport in Organisms" },
         lessons: [
-          ["النقل في النبات", "Transport in plants", 24, 45],
-          ["الانتشار عبر الأغشية", "Diffusion across membranes", 20, 5],
+          ["النقل في النبات", "Transport in plants", 24],
+          [
+            "الانتشار عبر الأغشية",
+            "Diffusion across membranes",
+            20,
+            { values: { permeability: 80 }, view: "molecular" },
+          ],
         ],
       },
     ]),
@@ -190,15 +208,20 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "الموجات", en: "Waves" },
         lessons: [
-          ["الحركة الموجية", "Wave motion", 20, 75],
-          ["الصوت", "Sound", 18, 50],
+          ["الحركة الموجية", "Wave motion", 20],
+          ["الصوت", "Sound", 18],
         ],
       },
       {
         title: { ar: "الحرارة والمادة", en: "Heat and Matter" },
         lessons: [
-          ["قوانين الغازات", "Gas laws", 25, 20],
-          ["المقاومة ودرجة الحرارة", "Resistance and temperature", 22, 0],
+          ["قوانين الغازات", "Gas laws", 25],
+          [
+            "المقاومة ودرجة الحرارة",
+            "Resistance and temperature",
+            22,
+            { values: { temperature: 60 }, view: "molecular" },
+          ],
         ],
       },
     ]),
@@ -206,15 +229,15 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "المحاليل والأحماض", en: "Solutions and Acids" },
         lessons: [
-          ["أنواع المحاليل", "Types of solutions", 18, 70],
-          ["الأحماض والقواعد", "Acids and bases", 22, 45],
+          ["أنواع المحاليل", "Types of solutions", 18],
+          ["الأحماض والقواعد", "Acids and bases", 22],
         ],
       },
       {
         title: { ar: "الكيمياء الحرارية", en: "Thermochemistry" },
         lessons: [
-          ["المحتوى الحراري", "Enthalpy", 20, 30],
-          ["طاقة التنشيط والعوامل الحفازة", "Activation energy and catalysts", 24, 0],
+          ["المحتوى الحراري", "Enthalpy", 20],
+          ["طاقة التنشيط والعوامل الحفازة", "Activation energy and catalysts", 24],
         ],
       },
     ]),
@@ -224,15 +247,15 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "الدعامة والحركة", en: "Support and Movement" },
         lessons: [
-          ["الهيكل العظمي", "The skeleton", 20, 88],
-          ["الانقباض العضلي", "Muscle contraction", 24, 62],
+          ["الهيكل العظمي", "The skeleton", 20],
+          ["الانقباض العضلي", "Muscle contraction", 24],
         ],
       },
       {
         title: { ar: "التنظيم الهرموني", en: "Hormonal Coordination" },
         lessons: [
-          ["الغدد الصماء", "Endocrine glands", 22, 40],
-          ["النقل الخلوي والانتشار", "Cellular transport and diffusion", 20, 12],
+          ["الغدد الصماء", "Endocrine glands", 22],
+          ["النقل الخلوي والانتشار", "Cellular transport and diffusion", 20],
         ],
       },
     ]),
@@ -240,16 +263,21 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "التيار الكهربي وقانون أوم", en: "Electric Current & Ohm's Law" },
         lessons: [
-          ["شدة التيار وفرق الجهد", "Current and potential difference", 20, 92],
-          ["قانون أوم", "Ohm's law", 25, 48],
-          ["المقاومة الكهربية ودرجة الحرارة", "Resistance and temperature", 22, 15],
+          ["شدة التيار وفرق الجهد", "Current and potential difference", 20],
+          ["قانون أوم", "Ohm's law", 25],
+          [
+            "المقاومة الكهربية ودرجة الحرارة",
+            "Resistance and temperature",
+            22,
+            { values: { temperature: 60 }, view: "molecular" },
+          ],
         ],
       },
       {
         title: { ar: "التأثير المغناطيسي للتيار", en: "Magnetic Effect of Current" },
         lessons: [
-          ["المجال المغناطيسي لسلك مستقيم", "Field around a straight wire", 24, 0],
-          ["المحرك الكهربي", "The electric motor", 26, 0],
+          ["المجال المغناطيسي لسلك مستقيم", "Field around a straight wire", 24],
+          ["المحرك الكهربي", "The electric motor", 26],
         ],
       },
     ]),
@@ -257,15 +285,20 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "الاتزان الكيميائي", en: "Chemical Equilibrium" },
         lessons: [
-          ["سرعة التفاعل الكيميائي", "Reaction rate", 22, 58],
-          ["العوامل المؤثرة على سرعة التفاعل", "Factors affecting reaction rate", 24, 22],
+          ["سرعة التفاعل الكيميائي", "Reaction rate", 22],
+          [
+            "العوامل المؤثرة على سرعة التفاعل",
+            "Factors affecting reaction rate",
+            24,
+            { values: { concentration: 1.5 } },
+          ],
         ],
       },
       {
         title: { ar: "الكيمياء الكهربية", en: "Electrochemistry" },
         lessons: [
-          ["الخلايا الجلفانية", "Galvanic cells", 25, 10],
-          ["التحليل الكهربي", "Electrolysis", 24, 0],
+          ["الخلايا الجلفانية", "Galvanic cells", 25],
+          ["التحليل الكهربي", "Electrolysis", 24],
         ],
       },
     ]),
@@ -275,22 +308,6 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
 export const DEFAULT_GRADE: GradeId = "g12";
 export const DEFAULT_SUBJECT: SubjectId = "physics";
 export const DEFAULT_LESSON_ID = "g12-physics-u1-l2";
-
-export const student = {
-  name: { ar: "يوسف", en: "Youssef" } satisfies L10n,
-  xp: 2480,
-  level: 12,
-  streak: 7,
-  weekly: [
-    { day: { ar: "سبت", en: "Sat" }, minutes: 25 },
-    { day: { ar: "أحد", en: "Sun" }, minutes: 40 },
-    { day: { ar: "اتنين", en: "Mon" }, minutes: 18 },
-    { day: { ar: "تلات", en: "Tue" }, minutes: 52 },
-    { day: { ar: "أربع", en: "Wed" }, minutes: 34 },
-    { day: { ar: "خميس", en: "Thu" }, minutes: 46 },
-    { day: { ar: "جمعة", en: "Fri" }, minutes: 30 },
-  ],
-};
 
 export const STUDENT_PRICE_EGP = 99;
 
@@ -328,16 +345,16 @@ export function findLesson(id: string | undefined): LessonLookup {
   throw new Error("Default lesson missing from curriculum");
 }
 
+/** Resolves a lesson's mastery (0–100) from the learner's saved progress. */
 export type MasteryResolver = (lesson: Lesson) => number;
-const seededMastery: MasteryResolver = (lesson) => lesson.mastery;
 
-export function subjectMastery(units: Unit[], mastery: MasteryResolver = seededMastery) {
+export function subjectMastery(units: Unit[], mastery: MasteryResolver) {
   const all = units.flatMap((u) => u.lessons);
   if (all.length === 0) return 0;
   return Math.round(all.reduce((s, l) => s + mastery(l), 0) / all.length);
 }
 
-export function unitMastery(unit: Unit, mastery: MasteryResolver = seededMastery) {
+export function unitMastery(unit: Unit, mastery: MasteryResolver) {
   return subjectMastery([unit], mastery);
 }
 

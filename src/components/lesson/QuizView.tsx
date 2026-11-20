@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { LessonLookup } from "@/data/mockCurriculum";
 import { buildComparison } from "@/data/quizCompare";
 import type { QuizQuestion, SimulationDef } from "@/data/simulations";
+import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { ComparisonBars } from "./ComparisonBars";
 import type { QuizApi } from "./useQuiz";
@@ -20,6 +21,7 @@ interface Props {
 
 export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson }: Props) {
   const { t, l, lang, dir } = useLang();
+  const { user, configured } = useAuth();
   const Forward = dir === "rtl" ? ArrowLeft : ArrowRight;
   const { index, selected, score, done } = quiz.state;
 
@@ -42,7 +44,9 @@ export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson
           {score}/{sim.quiz.length}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">+{xpGained} XP</p>
-        <p className="mt-1 text-xs text-muted-foreground">{t("progressSaved")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t(user ? "progressSavedAccount" : configured ? "progressGuest" : "progressSaved")}
+        </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="subject-soft" className="rounded-full" onClick={quiz.restart}>
             <RotateCcw /> {t("restartQuiz")}
@@ -146,13 +150,22 @@ export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson
       )}
 
       {answered && !correct && (
-        <div className="relative mt-6 animate-fade-up rounded-2xl border border-warning/50 bg-warning/10 p-4">
+        <div
+          role="alert"
+          className="relative mt-6 animate-fade-up rounded-2xl border border-warning/50 bg-warning/10 p-4"
+        >
+          <p className="sr-only">{t("wrongAlert")}</p>
           <p className="font-bold text-warning">{t("wrong")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{l(q.explanation)}</p>
-          {comparison && (
+          {comparison ? (
             <div className="mt-3">
               <ComparisonBars cmp={comparison} compact />
             </div>
+          ) : (
+            <p className="mt-2 text-xs">
+              <span className="font-semibold text-bio">{t("compareCorrect")}:</span>{" "}
+              {l(q.options[q.correct] ?? q.options[0]!)}
+            </p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             <button

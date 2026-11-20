@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AccountNotice } from "@/components/layout/AccountNotice";
 import { Navbar } from "@/components/layout/Navbar";
 import { LessonWorkspace } from "@/components/lesson/LessonWorkspace";
 import { findLesson } from "@/data/mockCurriculum";
@@ -38,6 +39,9 @@ function LessonPage() {
     <div data-subject={lookup.subject.id} className="min-h-screen">
       <Navbar grade={lookup.grade.id} />
       <main className="mx-auto max-w-[1500px] px-3 pb-24 pt-4 sm:px-5">
+        <div className="mb-3 empty:hidden">
+          <AccountNotice />
+        </div>
         <LessonWorkspace key={lookup.lesson.id} lookup={lookup} />
       </main>
     </div>

@@ -1,84 +1,107 @@
-# LabX — Architecture & Engineering Rules
+# LabX — ARCHITECTURE
 
-Interactive science learning platform (Biology, Physics, Chemistry), Web-first and lightweight.
-Stack: React 19 · TanStack Start/Router · Tailwind v4 · Recharts · Lucide. Three.js is planned (see `SimulationStage`).
+منصة علوم تفاعلية (أحياء / فيزياء / كيمياء). React 19 · TanStack Start/Router · Tailwind v4 · Recharts · Supabase (Auth + جدول `user_progress`). المنهج mock (محتوى فقط)، أما التقدم والـ XP والـ streak فحقيقية: للمسجَّل في Supabase، وللضيف في الذاكرة فقط.
 
-## 1. Engineering rules (binding for every change)
-
-Before writing or changing code, think step by step:
-
-1. **Requirements** — what exactly is asked, and how does it fit the current structure without needless complexity?
-2. **Edge cases** — boundary and extreme values, poor connectivity, different screen sizes and devices.
-3. **Security risks** — leaked API keys, XSS, data permissions, untrusted input — and how each is prevented.
-4. **Scalability & performance** — light, clean, maintainable, able to handle high user load and large data flow.
-
-After implementing, self-review:
-
-- Bugs, logic errors, memory/event leaks?
-- Clear wins in performance, readability or UX?
-- Were existing features preserved (nothing broken)?
-
-Fix every problem found. Only deliver code after verifying it is correct and coherent, with a short explanation of the changes and assumptions.
-
-## 2. Domain model
+## 1. الهيكل الفعلي
 
 ```
-Grade (g10 | g11 | g12)
- └─ Subject (biology | physics | chemistry)
-     └─ Unit
-         └─ Lesson ──▶ Simulation (diffusion | ohm | reaction-rate)
+src/routes/            الصفحات (file-based) — index (/)، auth (تسجيل/حساب)، dashboard، lesson، __root (الـ shell + 404 + AuthProvider)
+src/components/
+  landing/ layout/     الصفحة الرئيسية، Navbar، Footer
+  dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
+  lesson/              مساحة الدرس بالكامل (انظر §4)
+    scenes/            مشاهد SVG لكل محاكاة × منظور (macro/molecular) — مكان Three.js مستقبلاً
+  brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
+src/data/
+  mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)
+  simulations.ts       نماذج رياضية نقية (computeOhm/Rate/Diffusion)، المتغيرات، القصة، الشرح، الأسئلة
+  simExtras.ts         الأعطال (faults)، التحذيرات (hazards)، الخطوات الموجّهة، الحسابات، الطبقات
+  tutor.ts             كشف النية + بناء ردود المعلم الذكي من سياق الشاشة
+  quizCompare.ts       أرقام "قبل / اللي اخترته يعني / الفعلي" للإجابة الخاطئة
+src/lib/
+  i18n.tsx             LanguageProvider (ar/en + RTL) وكل نصوص الواجهة `ui`
+  progress.ts          حالة التقدم + التحقق + دمج (mergeProgress) + repositories (memory للضيف، localStorage احتياطي بدون Supabase) + store (attachRepository)
+  progress-remote.ts   repository على Supabase (hydrate/upsert مؤجّل/flush) — جدول user_progress بـ RLS
+  supabase.ts          عميل المتصفح من VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY فقط (يرفض مفاتيح service/secret)
+  auth.tsx, auth-utils.ts   AuthProvider/useAuth (جلسة + مزامنة التقدم)، تحقق المدخلات، ترجمة أخطاء Supabase، safeRedirect
+  use-progress.ts      hooks (useProgress/useMastery/useStudentStats) — use-is-client.ts للـ hydration
+supabase/schema.sql    جدول user_progress + سياسات RLS (يُشغَّل يدوياً في Supabase)
+.env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
+  error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
+src/server.ts, start.ts   مدخل السيرفر ووسيط الأخطاء/CSRF
+src/styles.css         التصميم (ألوان المواد عبر data-subject، glass، animations)
+src/test/              vitest: النماذج، extras، progress، tutor، LessonWorkspace، routing
+public/                الشعار والأيقونات و og-image
+vite.config.ts         plugins صريحة (tanstackStart, nitro للـ build فقط, react, tailwind)
 ```
 
-- `src/data/mockCurriculum.ts` — curriculum tree + lookup helpers. Components depend only on its types, so it can be replaced by an API.
-- `src/data/simulations.ts` — models (pure functions), variables, graph specs, story/explain/quiz content.
-- `src/data/simExtras.ts` — per-simulation learning extras: faults, hazards (real-world error mode), guided-discovery steps, calculation steps, subject layers.
-- `src/data/tutor.ts` — context-aware tutor: intent detection and replies built from the live scene.
-- `src/lib/progress.ts` — progress repository + store (validated, cross-tab synced). `src/lib/use-progress.ts` is the React binding.
+## 2. خريطة التعديل السريعة
 
-All simulation state is a flat `SimValues` bag of numbers (including `fault`). Models never read React state; they are pure so they can be unit tested and later driven by a 3D scene.
+| المهمة                                   | الملفات                                                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| إضافة/تعديل درس أو وحدة                  | `data/mockCurriculum.ts` (+ اختبار السلامة في `test/simulations.test.ts`)                                                                |
+| محاكاة جديدة                             | `simulations.ts` (النموذج + المحتوى) + `simExtras.ts` + مشهدان في `scenes/` + `scenes/index.ts` + `SimulationId` في `mockCurriculum.ts`  |
+| تغيير معادلة/متغير/سؤال                  | `simulations.ts` فقط (+ `simExtras.ts` إن تأثرت التحذيرات)                                                                               |
+| عطل أو تحذير واقعي جديد                  | `simExtras.ts` (faults/hazards) + استخدام `fault` في الدالة الحسابية داخل `simulations.ts`                                               |
+| خطوة موجّهة / حسابات / طبقة               | `simExtras.ts` (guided/calc/layers) + رسم الطبقة في المشهد المعني                                                                        |
+| ردود المعلم أو تلميحاته                  | `data/tutor.ts`؛ الشرائح والسياق المعروض في `AITutorDrawer.tsx`                                                                          |
+| الاختبار والمقارنة البصرية               | `simulations.ts` (quiz/claims) + `quizCompare.ts` + `QuizView.tsx` + `useQuiz.ts`                                                        |
+| التقدم/XP/streak                         | `lib/progress.ts` (+ `use-progress.ts`)؛ العرض في `components/dashboard/*`                                                               |
+| تسجيل الدخول/الحساب/Supabase             | `routes/auth.tsx`, `lib/auth.tsx`, `lib/auth-utils.ts`, `lib/supabase.ts`, `lib/progress-remote.ts`, `supabase/schema.sql`, `Navbar.tsx` |
+| إعداد محاكاة خاص بدرس                    | `preset` في `mockCurriculum.ts` (`build`) + `lessonDefaults` في `simulations.ts` (يُطبَّق في `LessonWorkspace`)                             |
+| شكل المنصة (stage/toolbar/HUD)           | `SimulationStage.tsx`, `StageToolbar.tsx`, `StageInsets.tsx`, `HazardBanner.tsx`                                                         |
+| لوحة التحكم (sliders/حسابات/وضع الأخطاء) | `ControlPanel.tsx`, `ErrorModePanel.tsx`                                                                                                 |
+| نص واجهة أو ترجمة                        | `lib/i18n.tsx` (`ui`)؛ نصوص المحتوى تبقى في `data/*` بصيغة `{ar,en}`                                                                     |
+| ألوان/animations                         | `styles.css`                                                                                                                             |
+| صفحة جديدة                               | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                       |
+| Three.js                                 | الـ TODO في `SimulationStage.tsx`؛ استبدال `scenes/` بنفس الـ props (`SceneProps`)                                                       |
 
-## 3. Lesson flow (4 steps)
+## 3. ملفات حساسة
 
-1. **Real-world story** (≈30 s) — overlay on the stage.
-2. **Interactive explanation** — _Guided Discovery_: each step applies a start state, asks the student to change a variable, and verifies it live (`GuidedStep.done`). In _free_ mode the same content is shown as plain cards.
-3. **Free exploration** — all sliders, view toggle, subject layers, optional **Real-World Error Mode** (inject faults; hazards always evaluated).
-4. **Visual quiz** — wrong answers link to a simulation state with a before / claimed / actual comparison and a way back to the quiz (quiz state lives in `useQuiz`, so it survives leaving the step).
+- `data/simulations.ts` — `SimValues`/`SimKey` مشتركة بين كل المحاكاة والمشاهد والمعلم؛ تغيير مفتاح يكسر الجميع. الدوال النقية لا تقرأ React.
+- `data/simExtras.ts` — عتبات التحذيرات يختبرها `test/extras.test.ts` (الخطوات الموجّهة يجب ألا تُطلق تحذيراً).
+- `LessonWorkspace.tsx` — المنسّق: حالة القيم، الخطوة، الوضع، الأعطال، الاختبار، الحفظ. ترتيب `goStep` و`seeMistake` مهم.
+- `lib/progress.ts` — كل ما يُقرأ من التخزين غير موثوق (`sanitizeProgress`)؛ لا تتخطَّه. الـ XP يُمنح للتحسّن فقط. لا تربط الـ store بـ repository بعيد قبل نجاح `hydrate()` (وإلا قد يُستبدل تقدم الحساب بحالة فارغة).
+- `lib/supabase.ts` — مفتاح الـ anon فقط في `VITE_*`؛ أي مفتاح service/secret ممنوع. الحماية الفعلية من RLS في `supabase/schema.sql`.
+- `SimulationStage.tsx` — المشهد يُرسم client-only (`useIsClient`) لتجنب hydration mismatch بسبب `Math.sin/cos`.
+- `scenes/sceneUtils.ts` — `SceneProps` و`useSimClock`/`useIntegrated`؛ المشاهد تعتمد عليها.
+- `routeTree.gen.ts`, `components/ui/*` — مُولَّدة/جاهزة، لا تُعدَّل يدوياً.
+- `server.ts`, `start.ts`, `lib/error-*.ts` — حماية SSR/CSRF؛ لا تضف ضغطاً للردود.
+- `vite.config.ts` — ترتيب الـ plugins مهم؛ `nitro` يعمل وقت الـ build فقط.
 
-## 4. Real-World Error Mode
+## 4. العلاقات وتدفق البيانات
 
-`simExtras.hazards(values)` is pure and returns `warning` / `critical` hazards with _cause_, _real consequence_ and _fix_. They drive:
+```
+routes/lesson.tsx ──(id)──▶ findLesson ──▶ LessonWorkspace (حالة واحدة)
+   values (SimValues) ◀── ControlPanel sliders / ErrorModePanel (fault) / GuidedDiscovery.start
+        │
+        ├─▶ sim.readouts/graph/activity ─▶ ControlPanel (قراءات، رسم، حسابات)
+        ├─▶ extras.hazards(values) ─▶ SimulationStage (HazardBanner + اهتزاز/تنبيه) + ErrorModePanel + المعلم
+        └─▶ Scene (macro|molecular) ◀─ useSimClock(t) + layers + hazard
+step (1 قصة → 2 شرح موجّه → 3 تجربة حرة → 4 اختبار)
+   2 + mode=guided ─▶ useGuided (يتحقق من done(values) ويُثبّته)
+   4 ─▶ useQuiz (الحالة في الـ workspace) ─▶ خطأ ─▶ buildComparison + seeMistake ─▶ stage demo ─▶ ارجع للاختبار
+AITutorDrawer ◀─ values, lastChange, step, mode, view, hazards, guided ─▶ tutor.buildTutorReply(sim.tutor + سياق)
+progress: goStep ─▶ progressStore.recordStep ; اكتمال الاختبار ─▶ recordQuiz ─▶ repository الحالي
+          (مسجَّل: Supabase بعد hydrate ودمج عمل الضيف؛ ضيف: ذاكرة فقط؛ بدون Supabase: localStorage احتياطي)
+          dashboard/UnitCard/TopBar ◀─ useMastery/useStudentStats (الإتقان = المحفوظ فقط، بدون قيم mock)
+auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSupabaseRepository.hydrate ─▶ progressStore.attachRepository
+اللغة: LanguageProvider ◀─ localStorage `labx.lang`؛ كل نص = `ui[key][lang]` أو `{ar,en}`
+```
 
-- the stage overlay (vignette, shake, sparks) and banner,
-- the control panel hazard list,
-- the AI tutor (`hazard` intent and appended to "why" answers).
+## 5. قواعد التنفيذ الثابتة
 
-Faults (`values.fault` ≠ 0) are only selectable when Error Mode is on; hazards from extreme slider values are always reported — silent failure is not allowed.
+1. **في كل أمر جديد:** اقرأ هذا الملف أولاً، واكتب **خطة من سطرين فقط** قبل لمس أي كود.
+2. **فكّر باختصار** في: المتطلبات، الـ Edge Cases (قيم متطرفة، شاشات صغيرة، ضعف الاتصال)، الأمان (لا `dangerouslySetInnerHTML`، لا مفاتيح، تحقق من أي مدخل/تخزين)، والأداء (لا re-render لكل frame خارج الـ stage؛ نظّف الـ timers والـ listeners).
+3. **اقرأ فقط** الملفات المرتبطة بالمهمة حسب الخريطة (§2) — لا تفحص المشروع كله.
+4. **بعد التعديل:** راجع الكود لإصلاح أي bug أو كسر لميزة قائمة (النماذج، المسار التعليمي، المعلم، الحفظ، RTL/AR-EN، الموبايل).
+5. **لا تشغّل** `npm run build` ولا `git push` إلا عند الطلب الصريح. شغّل فقط الاختبار/الـ typecheck الأقل الذي يغطي التغيير.
+6. الأرقام والنصوص المعروضة ثنائية اللغة؛ لا تضف نصاً عربياً فقط. Prettier إلزامي (`npx prettier --write` للملفات المعدّلة).
 
-## 5. Progress & persistence
+## 6. قيود معروفة
 
-- `ProgressRepository` is the storage seam (`load`, `save`, `subscribe`). Today: `localStorage` keyed by user id (`guest` until accounts exist).
-- Everything read from storage is **untrusted**: parsed in try/catch, shape-checked, numbers clamped, unknown lesson ids dropped, entries capped.
-- Cross-tab sync through the `storage` event; SSR-safe via `useSyncExternalStore` server snapshot (no hydration mismatch).
-- XP is only awarded for _improvement_ over the best score (no farming).
-- Swapping in an account-backed repository (REST / DB) only requires implementing the interface.
-
-## 6. Security checklist
-
-- No `dangerouslySetInnerHTML`, no `eval`; all text (including tutor replies and free-text input) is rendered as React text. Free-text input is length-capped.
-- URL search params are validated (`validateSearch`) and fall back to safe defaults.
-- No secrets in the repo; the tutor is local/mocked. A real LLM must be called server-side only.
-- Persisted data is validated on read (see §5).
-
-## 7. Performance notes
-
-- Animation clock lives inside `SimulationStage`; only the stage re-renders per frame.
-- Heavy derived data (graph, readouts, hazards) is memoised on `values`.
-- Timers / listeners are cleaned up on unmount; clock stops when playing is off.
-- Scenes render client-side only (useIsClient): Math.sin/cos differ in the last digits between Node and the browser, which caused hydration mismatches.
-- The story overlay scrolls inside the stage so it is never hidden behind the toolbar on small screens.
-
-## 8. Known limitations / next steps
-
-- Each subject currently has one simulation shared by all its lessons (mock mapping in `mockCurriculum.ts`).
-- Stage is a 2D SVG preview; mount Three.js at the `TODO` in `SimulationStage.tsx`.
-- No real accounts/server yet: progress is per browser profile. Cross-device sync needs a backend implementing `ProgressRepository`.
+- محاكاة واحدة لكل مادة تُستخدم لكل دروسها؛ التمييز بين الدروس عبر `preset` (قيم بداية + المنظور). أسئلة الاختبار والمقارنة مرتبطة بقيم النموذج الافتراضية لا بالـ preset.
+- XP/streak يحسبهما العميل ويخزّنهما في صف المستخدم (RLS يمنع الوصول لغيره لكن لا يمنع المستخدم من تعديل صفه)؛ لا تستخدمهما لأي مكافأة ذات قيمة مالية بدون تحقق من السيرفر.
+- الحفظ last-write-wins بين الأجهزة (الدمج يحدث عند تسجيل الدخول فقط).
+- نشاط الأسبوع تقدير من وقت آخر تحديث لكل درس (لا يوجد تتبع زمن فعلي).
+- المعلم الذكي محلي (قواعد)؛ أي LLM حقيقي يُستدعى من السيرفر فقط بنفس `TutorContext`.

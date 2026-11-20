@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, ChevronDown, GraduationCap } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, GraduationCap, LogOut, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { LangToggle } from "@/components/common/LangToggle";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_GRADE, grades, type GradeId } from "@/data/mockCurriculum";
+import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 
 export function GradePreview({ active = DEFAULT_GRADE }: { active?: GradeId | undefined }) {
@@ -58,9 +59,72 @@ export function GradePreview({ active = DEFAULT_GRADE }: { active?: GradeId | un
   );
 }
 
-export function Navbar({ grade }: { grade?: GradeId | undefined }) {
+function AccountActions() {
   const { t, dir } = useLang();
+  const { status, user, configured, signOut } = useAuth();
   const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
+
+  if (status === "loading") return <span aria-hidden className="h-8 w-24" />;
+
+  if (user) {
+    return (
+      <>
+        <Link
+          to="/auth"
+          aria-label={t("account")}
+          className="glass hidden max-w-[10rem] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent/60 md:flex"
+        >
+          <UserRound className="size-4 shrink-0 text-phys" />
+          <span className="truncate">{user.name || user.email}</span>
+        </Link>
+        <Button asChild variant="hero" size="sm" className="rounded-full px-4">
+          <Link to="/dashboard">
+            {t("dashboard")}
+            <Arrow />
+          </Link>
+        </Button>
+        <Button
+          type="button"
+          variant="glass"
+          size="icon"
+          className="rounded-full"
+          aria-label={t("signOut")}
+          title={t("signOut")}
+          onClick={() => void signOut()}
+        >
+          <LogOut />
+        </Button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {configured && (
+        <Button asChild variant="glass" size="sm" className="rounded-full px-4">
+          <Link to="/auth" search={{ mode: "signin" }}>
+            {t("signIn")}
+          </Link>
+        </Button>
+      )}
+      <Button asChild variant="hero" size="sm" className="rounded-full px-4">
+        {configured ? (
+          <Link to="/auth" search={{ mode: "signup" }}>
+            {t("startFree")}
+            <Arrow />
+          </Link>
+        ) : (
+          <Link to="/dashboard">
+            {t("startFree")}
+            <Arrow />
+          </Link>
+        )}
+      </Button>
+    </>
+  );
+}
+
+export function Navbar({ grade }: { grade?: GradeId | undefined }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
@@ -70,12 +134,7 @@ export function Navbar({ grade }: { grade?: GradeId | undefined }) {
             <GradePreview active={grade} />
           </div>
           <LangToggle />
-          <Button asChild variant="hero" size="sm" className="rounded-full px-4">
-            <Link to="/dashboard">
-              {t("startFree")}
-              <Arrow />
-            </Link>
-          </Button>
+          <AccountActions />
         </div>
       </nav>
     </header>

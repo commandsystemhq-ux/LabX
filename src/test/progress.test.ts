@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   createLocalRepository,
+  createMemoryRepository,
   createProgressStore,
   dayKey,
   EMPTY_PROGRESS,
   effectiveMastery,
+  mergeProgress,
   nextStreak,
   sanitizeProgress,
   studentStats,
@@ -118,9 +120,9 @@ describe("progress transitions", () => {
     expect(withQuizResult(EMPTY_PROGRESS, LESSON, -5, 3, 1, "2026-11-20").xpGained).toBe(0);
   });
 
-  it("streak: baseline on first activity, +1 on consecutive days, reset after a gap", () => {
+  it("streak: starts at 1, +1 on consecutive days, reset after a gap", () => {
     const first = nextStreak(null, "2026-11-20");
-    expect(first.count).toBeGreaterThanOrEqual(1);
+    expect(first.count).toBe(1);
     expect(nextStreak(first, "2026-11-20")).toBe(first);
     expect(nextStreak(first, "2026-11-21").count).toBe(first.count + 1);
     expect(nextStreak(first, "2026-11-25").count).toBe(1);
@@ -132,16 +134,98 @@ describe("progress transitions", () => {
     expect(dayKey(new Date(2026, 0, 5))).toBe("2026-01-05");
   });
 
-  it("stored mastery never lowers seeded mastery", () => {
+  it("mastery and stats come only from saved progress (no mock baseline)", () => {
     const state: ProgressState = {
       ...EMPTY_PROGRESS,
       lessons: {
         [LESSON]: { step: 4, bestScore: 1, total: 4, attempts: 1, mastery: 25, updatedAt: 0 },
       },
     };
-    expect(effectiveMastery(state, { id: LESSON, mastery: 48 })).toBe(48);
-    expect(effectiveMastery(state, { id: LESSON, mastery: 10 })).toBe(25);
-    expect(studentStats({ ...state, xp: 500 }).level).toBeGreaterThan(studentStats(state).level);
+    expect(effectiveMastery(state, { id: LESSON })).toBe(25);
+    expect(effectiveMastery(EMPTY_PROGRESS, { id: LESSON })).toBe(0);
+    expect(studentStats(EMPTY_PROGRESS, "2026-11-20")).toEqual({ xp: 0, streak: 0, level: 1 });
+    expect(studentStats({ ...state, xp: 500 }).level).toBe(3);
+  });
+
+  it("a streak only counts while the last active day is today or yesterday", () => {
+    const state: ProgressState = { ...EMPTY_PROGRESS, streak: { count: 5, lastDay: "2026-11-19" } };
+    expect(studentStats(state, "2026-11-19").streak).toBe(5);
+    expect(studentStats(state, "2026-11-20").streak).toBe(5);
+    expect(studentStats(state, "2026-11-21").streak).toBe(0);
+  });
+});
+
+describe("mergeProgress + repository switching", () => {
+  const lesson = (bestScore: number, step: number, updatedAt: number) => ({
+    step,
+    bestScore,
+    total: 4,
+    attempts: 1,
+    mastery: bestScore * 25,
+    updatedAt,
+  });
+
+  it("keeps the best result per lesson, the furthest step, top XP and the latest streak", () => {
+    const a: ProgressState = {
+      ...EMPTY_PROGRESS,
+      xp: 50,
+      streak: { count: 2, lastDay: "2026-11-19" },
+      lessons: { [LESSON]: lesson(3, 2, 10) },
+    };
+    const b: ProgressState = {
+      ...EMPTY_PROGRESS,
+      xp: 25,
+      streak: { count: 1, lastDay: "2026-11-20" },
+      lessons: { [LESSON]: lesson(1, 4, 20), "g12-physics-u1-l1": lesson(2, 1, 5) },
+    };
+    const m = mergeProgress(a, b);
+    expect(m.xp).toBe(50);
+    expect(m.streak?.lastDay).toBe("2026-11-20");
+    expect(m.lessons[LESSON]).toMatchObject({ bestScore: 3, mastery: 75, step: 4, updatedAt: 20 });
+    expect(Object.keys(m.lessons)).toHaveLength(2);
+  });
+
+  it("guest work is merged into the account on sign-in; sign-out drops the account's cache", () => {
+    const guest = createProgressStore(createMemoryRepository(), {
+      isKnownLesson: known,
+      today: () => "2026-11-20",
+    });
+    guest.recordQuiz(LESSON, 2, 4);
+
+    let remoteState: unknown = {
+      v: 1,
+      xp: 100,
+      streak: null,
+      lessons: { "g12-physics-u1-l1": lesson(4, 4, 1) },
+    };
+    const saved: unknown[] = [];
+    const account: ProgressRepository = {
+      load: () => remoteState,
+      save: (s) => {
+        remoteState = s;
+        saved.push(s);
+      },
+      subscribe: () => () => {},
+    };
+
+    guest.attachRepository(account, true);
+    const snap = guest.getSnapshot();
+    expect(Object.keys(snap.lessons).sort()).toEqual(["g12-physics-u1-l1", LESSON]);
+    expect(snap.xp).toBe(100);
+    expect(saved).toHaveLength(1);
+
+    guest.attachRepository(createMemoryRepository());
+    expect(guest.getSnapshot()).toEqual(EMPTY_PROGRESS);
+  });
+
+  it("does not write back when there was nothing to carry over", () => {
+    const store = createProgressStore(createMemoryRepository(), { isKnownLesson: known });
+    let writes = 0;
+    store.attachRepository(
+      { load: () => null, save: () => void writes++, subscribe: () => () => {} },
+      true,
+    );
+    expect(writes).toBe(0);
   });
 });
 

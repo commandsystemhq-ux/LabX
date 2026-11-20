@@ -1,11 +1,12 @@
-import { lessonExists, student, type Lesson } from "@/data/mockCurriculum";
+import { lessonExists, type Lesson } from "@/data/mockCurriculum";
+import { isSupabaseConfigured } from "./supabase";
 
 /**
  * Learner progress: a small validated state plus a repository seam.
  *
- * Today the repository is `localStorage` keyed by user id ("guest" until real accounts exist).
- * An account-backed implementation (REST / DB) only needs to satisfy `ProgressRepository`.
- * Anything read from storage is untrusted and passes through `sanitizeProgress`.
+ * Signed-in learners use the Supabase repository (progress-remote.ts). Guests get an in-memory
+ * repository (nothing persisted); `localStorage` is only a fallback when Supabase isn't configured.
+ * Anything read from a repository is untrusted and passes through `sanitizeProgress`.
  */
 
 export const PROGRESS_VERSION = 1;
@@ -34,7 +35,6 @@ export interface StreakState {
 
 export interface ProgressState {
   v: typeof PROGRESS_VERSION;
-  /** XP earned on top of the mock baseline. */
   xp: number;
   streak: StreakState | null;
   lessons: Record<string, LessonProgress>;
@@ -117,9 +117,9 @@ function previousDay(key: string) {
   return dayKey(new Date(y, m - 1, d - 1));
 }
 
-/** Keeps the mock baseline streak on first activity, then +1 per consecutive day. */
+/** Starts at 1 on first activity, then +1 per consecutive day. */
 export function nextStreak(streak: StreakState | null, today: string): StreakState {
-  if (!streak) return { count: student.streak, lastDay: today };
+  if (!streak) return { count: 1, lastDay: today };
   if (streak.lastDay === today) return streak;
   return {
     count: streak.lastDay === previousDay(today) ? streak.count + 1 : 1,
@@ -192,17 +192,50 @@ export function withQuizResult(
 
 /* ---------------------------------- queries ---------------------------------- */
 
-/** Stored mastery never lowers the seeded (mock) mastery. */
-export function effectiveMastery(state: ProgressState, lesson: Pick<Lesson, "id" | "mastery">) {
-  return Math.max(lesson.mastery, state.lessons[lesson.id]?.mastery ?? 0);
+export function effectiveMastery(state: ProgressState, lesson: Pick<Lesson, "id">) {
+  return state.lessons[lesson.id]?.mastery ?? 0;
 }
 
-export function studentStats(state: ProgressState) {
+/** A streak only counts while the last active day is today or yesterday. */
+export function studentStats(state: ProgressState, today: string = dayKey(new Date())) {
+  const alive =
+    state.streak && (state.streak.lastDay === today || state.streak.lastDay === previousDay(today));
   return {
-    xp: student.xp + state.xp,
-    streak: state.streak?.count ?? student.streak,
-    level: student.level + Math.floor(state.xp / XP_PER_LEVEL),
+    xp: state.xp,
+    streak: alive && state.streak ? state.streak.count : 0,
+    level: 1 + Math.floor(state.xp / XP_PER_LEVEL),
   };
+}
+
+/**
+ * Combine two states (e.g. guest session work + the account's saved progress) without losing
+ * anything: best score / furthest step per lesson, highest XP, most recent streak.
+ */
+export function mergeProgress(a: ProgressState, b: ProgressState): ProgressState {
+  const lessons: Record<string, LessonProgress> = { ...a.lessons };
+  for (const [id, mine] of Object.entries(b.lessons)) {
+    const theirs = lessons[id];
+    if (!theirs) {
+      lessons[id] = mine;
+      continue;
+    }
+    const best =
+      theirs.bestScore / Math.max(theirs.total, 1) >= mine.bestScore / Math.max(mine.total, 1);
+    const winner = best ? theirs : mine;
+    lessons[id] = {
+      ...winner,
+      step: Math.max(theirs.step, mine.step),
+      attempts: Math.min(1000, Math.max(theirs.attempts, mine.attempts)),
+      updatedAt: Math.max(theirs.updatedAt, mine.updatedAt),
+    };
+  }
+  const streak =
+    a.streak && b.streak
+      ? a.streak.lastDay >= b.streak.lastDay
+        ? a.streak
+        : b.streak
+      : (a.streak ?? b.streak);
+  return { v: PROGRESS_VERSION, xp: Math.max(a.xp, b.xp), streak, lessons };
 }
 
 /* ------------------------------- local repository ------------------------------ */
@@ -249,6 +282,18 @@ export function createLocalRepository(
   };
 }
 
+/** Guest repository: lives only for this page session and is never written to disk. */
+export function createMemoryRepository(): ProgressRepository {
+  let data: unknown = null;
+  return {
+    load: () => data,
+    save(state) {
+      data = state;
+    },
+    subscribe: () => () => {},
+  };
+}
+
 /* ----------------------------------- store ------------------------------------ */
 
 export interface ProgressStoreOptions {
@@ -257,11 +302,15 @@ export interface ProgressStoreOptions {
   isKnownLesson?: (id: string) => boolean;
 }
 
-export function createProgressStore(repo: ProgressRepository, options: ProgressStoreOptions = {}) {
+export function createProgressStore(
+  initialRepo: ProgressRepository,
+  options: ProgressStoreOptions = {},
+) {
   const now = options.now ?? Date.now;
   const today = options.today ?? (() => dayKey(new Date()));
   const isKnown = options.isKnownLesson ?? lessonExists;
   const listeners = new Set<() => void>();
+  let repo = initialRepo;
   let cache: ProgressState | null = null;
   let detach: (() => void) | null = null;
 
@@ -273,18 +322,19 @@ export function createProgressStore(repo: ProgressRepository, options: ProgressS
     repo.save(next);
     emit();
   };
+  const listen = () => {
+    detach = repo.subscribe(() => {
+      cache = read();
+      emit();
+    });
+  };
 
   return {
     getSnapshot: () => (cache ??= read()),
     getServerSnapshot: () => EMPTY_PROGRESS,
     subscribe(listener: () => void) {
       listeners.add(listener);
-      if (!detach) {
-        detach = repo.subscribe(() => {
-          cache = read();
-          emit();
-        });
-      }
+      if (!detach) listen();
       return () => {
         listeners.delete(listener);
         if (listeners.size === 0 && detach) {
@@ -292,6 +342,25 @@ export function createProgressStore(repo: ProgressRepository, options: ProgressS
           detach = null;
         }
       };
+    },
+    /**
+     * Swap the backing repository (sign in / sign out). With `mergeCurrent`, work already done in
+     * this session is merged into the new repository's state and written back; without it the
+     * previous owner's cached state is dropped so it never leaks to the next user.
+     */
+    attachRepository(next: ProgressRepository, mergeCurrent = false) {
+      const carried = mergeCurrent ? (cache ?? read()) : null;
+      detach?.();
+      detach = null;
+      repo = next;
+      cache = read();
+      if (carried && (carried.xp > 0 || Object.keys(carried.lessons).length > 0)) {
+        const merged = mergeProgress(cache, carried);
+        cache = merged;
+        repo.save(merged);
+      }
+      if (listeners.size > 0) listen();
+      emit();
     },
     recordStep(lessonId: string, step: number) {
       if (!isKnown(lessonId)) return;
@@ -311,4 +380,11 @@ export function createProgressStore(repo: ProgressRepository, options: ProgressS
 
 export type ProgressStore = ReturnType<typeof createProgressStore>;
 
-export const progressStore: ProgressStore = createProgressStore(createLocalRepository("guest"));
+/** Guest repository: in-memory when Supabase is configured, else the legacy local fallback. */
+export function createGuestRepository(supabaseConfigured: boolean): ProgressRepository {
+  return supabaseConfigured ? createMemoryRepository() : createLocalRepository("guest");
+}
+
+export const progressStore: ProgressStore = createProgressStore(
+  createGuestRepository(isSupabaseConfigured),
+);

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, PlayCircle } from "lucide-react";
+import { AccountNotice } from "@/components/layout/AccountNotice";
 import { Navbar } from "@/components/layout/Navbar";
 import { DashboardTopBar } from "@/components/dashboard/DashboardTopBar";
 import { UnitCard } from "@/components/dashboard/UnitCard";
@@ -13,12 +14,12 @@ import {
   DEFAULT_SUBJECT,
   isGradeId,
   isSubjectId,
-  student,
   subjectMastery,
   subjects,
   type GradeId,
   type SubjectId,
 } from "@/data/mockCurriculum";
+import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
 import { useMastery } from "@/lib/use-progress";
 
@@ -56,7 +57,8 @@ function Dashboard() {
   const grade = search["grade"] ?? DEFAULT_GRADE;
   const subjectId = search["subject"] ?? DEFAULT_SUBJECT;
   const navigate = useNavigate({ from: "/dashboard" });
-  const { l, lang, dir } = useLang();
+  const { l, t, lang, dir } = useLang();
+  const { user } = useAuth();
   const ar = lang === "ar";
   const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
 
@@ -76,10 +78,14 @@ function Dashboard() {
       <Navbar grade={grade} />
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6">
         <div className="mb-5 animate-fade-up">
-          <p className="text-sm text-muted-foreground">{ar ? "أهلاً يا" : "Welcome back,"}</p>
+          {user && <p className="text-sm text-muted-foreground">{t("welcomeBack")}</p>}
           <h1 className="font-display text-3xl font-bold">
-            {l(student.name)} <span className="inline-block animate-float">👋</span>
+            {user ? user.name || user.email : t("guestWelcome")}{" "}
+            <span className="inline-block animate-float">👋</span>
           </h1>
+        </div>
+        <div className="mb-4 empty:hidden">
+          <AccountNotice />
         </div>
 
         <DashboardTopBar grade={grade} onGrade={(g) => setSearch({ grade: g })} />

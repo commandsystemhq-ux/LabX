@@ -12,9 +12,16 @@ export interface Comparison {
   /** What the chosen (wrong) option implicitly claims; null when the option makes no numeric claim. */
   claimed: number | null;
   actual: number;
+  /** claimed − actual (null without a numeric claim). */
+  gap: number | null;
+  /** |gap| relative to |actual|, in percent (null without a claim or when actual is ~0). */
+  gapPct: number | null;
   chosen: L10n | null;
   correct: L10n;
 }
+
+/** Within this relative error a wrong numeric claim is flagged as "close to actual". */
+export const CLOSE_PCT = 10;
 
 /** Simulation values used for the "after" state of a question's demo. */
 export function demoValues(sim: SimulationDef, q: QuizQuestion) {
@@ -35,7 +42,11 @@ export function buildComparison(
   if (!b || !a || !correct) return null;
   if (!Number.isFinite(b.value) || !Number.isFinite(a.value)) return null;
 
-  const claim = chosen !== null ? q.claims?.[chosen] : undefined;
+  const rawClaim = chosen !== null ? q.claims?.[chosen] : undefined;
+  const claim = typeof rawClaim === "number" && Number.isFinite(rawClaim) ? rawClaim : undefined;
+  const gap = claim !== undefined ? claim - a.value : null;
+  const gapPct =
+    gap !== null && Math.abs(a.value) > 1e-9 ? (Math.abs(gap) / Math.abs(a.value)) * 100 : null;
   return {
     key: a.key,
     label: a.label,
@@ -45,6 +56,8 @@ export function buildComparison(
     before: b.value,
     claimed: claim ?? null,
     actual: a.value,
+    gap,
+    gapPct,
     chosen: chosen !== null ? (q.options[chosen] ?? null) : null,
     correct,
   };

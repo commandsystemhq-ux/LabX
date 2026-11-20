@@ -5,6 +5,7 @@ import { buildComparison, demoValues } from "@/data/quizCompare";
 import { defaultLayers, extras } from "@/data/simExtras";
 import {
   defaultsOf,
+  lessonDefaults,
   simulations,
   type QuizQuestion,
   type SimKey,
@@ -34,13 +35,16 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const lessonId = lookup.lesson.id;
   const nextLesson = useMemo(() => getNextLesson(lessonId), [lessonId]);
   const savedStep = useProgress().lessons[lessonId]?.step ?? 1;
+  const preset = lookup.lesson.preset;
+  // Lesson-specific starting scene. The quiz demos/comparison stay anchored to the model defaults.
+  const lessonBase = useMemo(() => lessonDefaults(sim, preset), [sim, preset]);
 
-  const [values, setValues] = useState<SimValues>(() => defaultsOf(sim));
+  const [values, setValues] = useState<SimValues>(() => lessonBase);
   const [step, setStepState] = useState(1);
   const [reachedStep, setReachedStep] = useState(1);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
-  const [view, setView] = useState<StageView>("macro");
+  const [view, setView] = useState<StageView>(preset?.view ?? "macro");
   const [layers, setLayers] = useState<StageLayers>(() => defaultLayers(sim.id));
   const [resetKey, setResetKey] = useState(0);
   const [demo, setDemo] = useState<DemoInfo | null>(null);
@@ -62,7 +66,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const applyGuidedStart = (index: number) => {
     const s = sx.guided[index];
     if (!s) return;
-    setValues({ ...defaultsOf(sim), ...s.start });
+    setValues({ ...lessonBase, ...s.start });
     setLastChange(null);
     dragStart.current = null;
   };
@@ -105,7 +109,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   };
 
   const reset = () => {
-    setValues(defaultsOf(sim));
+    setValues(lessonBase);
     setResetKey((k) => k + 1);
     setDemo(null);
     setLastChange(null);

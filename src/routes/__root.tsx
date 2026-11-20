@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { AuthProvider } from "@/lib/auth";
 import { LanguageProvider } from "@/lib/i18n";
 
 function NotFoundComponent() {
@@ -125,7 +126,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-        <Outlet />
+        <AuthProvider>
+          <Outlet />
+        </AuthProvider>
       </LanguageProvider>
     </QueryClientProvider>
   );

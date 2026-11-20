@@ -1,5 +1,5 @@
 import type { L10n, Lang } from "@/lib/i18n";
-import type { SimulationId, SubjectId } from "./mockCurriculum";
+import type { SimPreset, SimulationId, SubjectId } from "./mockCurriculum";
 
 /**
  * Simulation definitions: variables, physics/chemistry/biology models, graph specs,
@@ -119,6 +119,21 @@ export function defaultsOf(sim: SimulationDef): SimValues {
     fault: 0,
   };
   for (const v of sim.variables) base[v.key] = v.default;
+  return base;
+}
+
+/**
+ * Starting values for one lesson: the simulation defaults plus the lesson's preset. Preset values
+ * are clamped to each variable's range, and unknown keys / `fault` are ignored.
+ */
+export function lessonDefaults(sim: SimulationDef, preset?: SimPreset): SimValues {
+  const base = defaultsOf(sim);
+  for (const v of sim.variables) {
+    const wanted = preset?.values?.[v.key];
+    if (typeof wanted === "number" && Number.isFinite(wanted)) {
+      base[v.key] = clamp(wanted, v.min, v.max);
+    }
+  }
   return base;
 }
 
