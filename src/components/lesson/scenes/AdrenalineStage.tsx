@@ -97,8 +97,6 @@ export function AdrenalineStage(props: SceneProps & { mode: "macro" | "molecular
           mode={props.mode}
           ar={ar}
           labels={props.labels}
-          neural={props.layers["brain"] ?? true}
-          signals={props.layers["signals"] ?? false}
           hazard={props.hazard}
           dilation={drive.dilation}
           stenosis={drive.stenosis}

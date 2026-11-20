@@ -1,10 +1,32 @@
 import { useFrame } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { buildTube } from "./adr3d-geometry";
+import { useDispose } from "./adr3d-core";
+import {
+  buildTube,
+  fiberGeometry,
+  headGeometry,
+  myelinGeometry,
+  receptorGeometry,
+  somaGeometry,
+  zDiscGeometry,
+} from "./adr3d-geometry";
 import { advance, MUSCLE_AT, NERVE_AT, SIGNAL_AT, type Live } from "./adr3d-model";
-import { useDispose } from "./adr3d-body";
 import { rand } from "./sceneUtils";
+
+/** Physically-based "medical illustration" material: glossy clearcoat, soft sheen, reflects the studio. */
+const organic = (color: string, extra: THREE.MeshPhysicalMaterialParameters = {}) =>
+  new THREE.MeshPhysicalMaterial({
+    color,
+    roughness: 0.38,
+    metalness: 0,
+    clearcoat: 0.7,
+    clearcoatRoughness: 0.25,
+    sheen: 0.5,
+    sheenRoughness: 0.5,
+    envMapIntensity: 1.2,
+    ...extra,
+  });
 
 const HEX: [number, number][] = [
   [0, 0],
@@ -18,7 +40,7 @@ const HEADS_PER_SIDE = 6;
 const CA = 44;
 
 /**
- * Muscle sarcomere: Z-discs, thick myosin filaments with swinging cross-bridge heads, thin actin
+ * Muscle sarcomere: Z-discs, curved myosin filaments with swinging cross-bridge heads, thin actin
  * filaments that slide inward in contraction cycles, and glowing Ca²⁺. The cycle rate follows the
  * adrenaline response; its depth follows the oxygen and glucose that fuel it (and a beta blocker).
  */
@@ -30,26 +52,37 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
   const zRight = useRef<THREE.Mesh>(null);
   const clock = useRef({ t: 0, acc: 0 });
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const thick = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#fb923c",
-        emissive: "#c2410c",
-        emissiveIntensity: 0.4,
-      }),
+  const geo = useMemo(
+    () => ({
+      thick: fiberGeometry(2.0, 0.055, 0.012, 3),
+      thin: fiberGeometry(1.3, 0.024, 0.02, 5),
+      head: headGeometry(),
+      disc: zDiscGeometry(),
+    }),
     [],
   );
-  const thin = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#7dd3fc",
-        emissive: "#0369a1",
-        emissiveIntensity: 0.4,
+  const mats = useMemo(
+    () => ({
+      thick: organic("#fb923c", { emissive: new THREE.Color("#c2410c"), emissiveIntensity: 0.3 }),
+      thin: organic("#7dd3fc", { emissive: new THREE.Color("#0369a1"), emissiveIntensity: 0.3 }),
+      head: organic("#fdba74", { emissive: new THREE.Color("#ea580c"), emissiveIntensity: 0.3 }),
+      disc: organic("#a78bfa", {
+        emissive: new THREE.Color("#6d28d9"),
+        emissiveIntensity: 0.35,
+        transparent: true,
+        opacity: 0.62,
+        side: THREE.DoubleSide,
       }),
+    }),
     [],
   );
-  useDispose(thick);
-  useDispose(thin);
+  useEffect(
+    () => () => {
+      Object.values(geo).forEach((g) => g.dispose());
+      Object.values(mats).forEach((m) => m.dispose());
+    },
+    [geo, mats],
+  );
   const grey = useMemo(() => new THREE.Color("#6b7280"), []);
   const tmp = useMemo(() => new THREE.Color(), []);
 
@@ -63,10 +96,11 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
 
     // Tired muscle (little oxygen / glucose) greys out; Ca²⁺ and glow follow the drive.
     tmp.set("#fb923c").lerp(grey, 1 - d.energy);
-    thick.color.copy(tmp);
-    thick.emissiveIntensity = 0.15 + 0.5 * d.energy;
+    mats.thick.color.copy(tmp);
+    mats.head.color.copy(tmp);
+    mats.thick.emissiveIntensity = 0.1 + 0.5 * d.energy;
     tmp.set("#7dd3fc").lerp(grey, 1 - d.energy);
-    thin.color.copy(tmp);
+    mats.thin.color.copy(tmp);
 
     zLeft.current?.position.set(-(1.8 - slide), 0, 0);
     zRight.current?.position.set(1.8 - slide, 0, 0);
@@ -79,7 +113,7 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
           const ring = k < 6 ? 0.36 : 0.62;
           const ang = ((k % 6) / 6) * Math.PI * 2 + (k < 6 ? 0 : Math.PI / 6);
           dummy.position.set(s * (1.8 - slide - 0.65), Math.cos(ang) * ring, Math.sin(ang) * ring);
-          dummy.rotation.set(0, 0, Math.PI / 2);
+          dummy.rotation.set(k * 0.9, 0, 0);
           dummy.scale.set(1, 1, 1);
           dummy.updateMatrix();
           a.setMatrixAt(side * ACTIN_PER_SIDE + k, dummy.matrix);
@@ -100,11 +134,11 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
             const swing = Math.sin(acc * Math.PI * 2 * 2 + k * 0.9 + fz * 7) * d.muscleAmp;
             dummy.position.set(
               s * (0.14 + k * 0.15) - s * 0.045 * swing,
-              fy + Math.cos(phi) * 0.075,
-              fz + Math.sin(phi) * 0.075,
+              fy + Math.cos(phi) * 0.06,
+              fz + Math.sin(phi) * 0.06,
             );
-            dummy.rotation.set(phi, 0, -s * 0.7 * swing);
-            dummy.scale.set(1, 1, 1);
+            dummy.rotation.set(phi, 0, -s * (0.55 + 0.7 * swing));
+            dummy.scale.setScalar(0.085);
             dummy.updateMatrix();
             h.setMatrixAt(i++, dummy.matrix);
           }
@@ -117,9 +151,8 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
     if (ca) {
       ca.count = Math.round(CA * d.calcium * (0.3 + 0.7 * wave));
       for (let i = 0; i < ca.count; i++) {
-        const sx = rand(i, 3) * 3.0 - 1.5;
         dummy.position.set(
-          sx + Math.sin(l.t * 2 + i) * 0.05,
+          rand(i, 3) * 3.0 - 1.5 + Math.sin(l.t * 2 + i) * 0.05,
           (rand(i, 4) - 0.5) * 1.5 + Math.cos(l.t * 1.7 + i) * 0.06,
           (rand(i, 5) - 0.5) * 1.5 + Math.sin(l.t * 1.3 + i * 2) * 0.06,
         );
@@ -134,41 +167,32 @@ export const Sarcomere = memo(function Sarcomere({ live }: { live: RefObject<Liv
 
   return (
     <group position={MUSCLE_AT}>
+      <pointLight position={[0, 1.8, 2.2]} color="#ffd9b0" intensity={3} distance={9} />
+      <pointLight position={[-2, -1.2, -1.5]} color="#7dd3fc" intensity={2.2} distance={9} />
       {HEX.map(([y, z], i) => (
-        <mesh key={i} position={[0, y, z]} rotation={[0, 0, Math.PI / 2]} material={thick}>
-          <cylinderGeometry args={[0.045, 0.045, 2.0, 12]} />
-        </mesh>
+        <mesh key={i} position={[0, y, z]} geometry={geo.thick} material={mats.thick} />
       ))}
       <instancedMesh
         ref={heads}
-        args={[undefined, undefined, HEX.length * 2 * HEADS_PER_SIDE]}
+        args={[geo.head, mats.head, HEX.length * 2 * HEADS_PER_SIDE]}
         frustumCulled={false}
-        material={thick}
-      >
-        <capsuleGeometry args={[0.022, 0.07, 4, 8]} />
-      </instancedMesh>
+      />
       <instancedMesh
         ref={actin}
-        args={[undefined, undefined, ACTIN_PER_SIDE * 2]}
+        args={[geo.thin, mats.thin, ACTIN_PER_SIDE * 2]}
         frustumCulled={false}
-        material={thin}
-      >
-        <cylinderGeometry args={[0.02, 0.02, 1.3, 8]} />
-      </instancedMesh>
+      />
       {[zLeft, zRight].map((r, i) => (
-        <mesh key={i} ref={r} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.85, 0.85, 0.07, 28]} />
-          <meshStandardMaterial
-            color="#a78bfa"
-            emissive="#6d28d9"
-            emissiveIntensity={0.5}
-            transparent
-            opacity={0.55}
-          />
-        </mesh>
+        <mesh
+          key={i}
+          ref={r}
+          geometry={geo.disc}
+          material={mats.disc}
+          rotation={[0, 0, Math.PI / 2]}
+        />
       ))}
       <instancedMesh ref={calcium} args={[undefined, undefined, CA]} frustumCulled={false}>
-        <sphereGeometry args={[1, 10, 8]} />
+        <icosahedronGeometry args={[1, 2]} />
         <meshBasicMaterial color="#bef264" toneMapped={false} />
       </instancedMesh>
     </group>
@@ -179,7 +203,7 @@ const PULSES = 6;
 const VESICLES = 26;
 const RECEPTORS = 14;
 
-/** Neuron + synapse: soma, dendrites, myelinated axon, terminals and neurotransmitter release. */
+/** Neuron + synapse: organic soma, tapered dendrites, myelinated axon, terminals and neurotransmitter release. */
 export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) {
   const parts = useMemo(() => {
     const dendrites = Array.from({ length: 9 }, (_, k) => {
@@ -210,9 +234,9 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
         .add(new THREE.Vector3(-2.7, (rand(k, 6) - 0.5) * 0.7, (rand(k, 7) - 0.5) * 0.7));
       return buildTube(
         new THREE.CatmullRomCurve3([start, mid, end]),
-        20,
-        8,
-        (u) => 0.085 * (1 - u) + 0.012,
+        24,
+        10,
+        (u) => 0.085 * (1 - u) ** 0.8 + 0.012,
       );
     });
     const axon = new THREE.CatmullRomCurve3([
@@ -221,38 +245,74 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
       new THREE.Vector3(0.5, -0.12, 0),
       new THREE.Vector3(1.75, 0.04, 0),
     ]);
-    return { dendrites, axon, axonGeo: buildTube(axon, 60, 10, () => 0.05) };
+    return {
+      dendrites,
+      axon,
+      axonGeo: buildTube(axon, 60, 12, () => 0.05),
+      soma: somaGeometry(0.5),
+      nucleus: somaGeometry(0.2),
+      bulb: somaGeometry(0.15),
+      post: somaGeometry(1.6),
+      myelin: myelinGeometry(),
+      receptor: receptorGeometry(),
+    };
   }, []);
   useEffect(
     () => () => {
       parts.dendrites.forEach((g) => g.dispose());
       parts.axonGeo.dispose();
+      for (const g of [
+        parts.soma,
+        parts.nucleus,
+        parts.bulb,
+        parts.post,
+        parts.myelin,
+        parts.receptor,
+      ])
+        g.dispose();
     },
     [parts],
   );
 
-  const soma = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#0f766e",
-        emissive: "#2dd4bf",
+  const mats = useMemo(
+    () => ({
+      soma: organic("#14b8a6", {
+        emissive: new THREE.Color("#2dd4bf"),
         emissiveIntensity: 0.6,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.93,
       }),
+      nucleus: organic("#99f6e4", { emissive: new THREE.Color("#5eead4"), emissiveIntensity: 0.5 }),
+      process: organic("#0f766e", { emissive: new THREE.Color("#14b8a6"), emissiveIntensity: 0.5 }),
+      myelin: organic("#fde68a", {
+        emissive: new THREE.Color("#f59e0b"),
+        emissiveIntensity: 0.18,
+        transparent: true,
+        opacity: 0.82,
+        clearcoat: 1,
+      }),
+      bulb: organic("#5eead4", { emissive: new THREE.Color("#14b8a6"), emissiveIntensity: 0.6 }),
+      post: organic("#1e3a8a", {
+        emissive: new THREE.Color("#3b82f6"),
+        emissiveIntensity: 0.2,
+        transparent: true,
+        opacity: 0.42,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+      receptor: organic("#93c5fd", {
+        emissive: new THREE.Color("#60a5fa"),
+        emissiveIntensity: 0.8,
+      }),
+    }),
     [],
   );
-  const process = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#115e59",
-        emissive: "#14b8a6",
-        emissiveIntensity: 0.5,
-      }),
-    [],
+  useEffect(
+    () => () => {
+      Object.values(mats).forEach((m) => m.dispose());
+    },
+    [mats],
   );
-  useDispose(soma);
-  useDispose(process);
 
   const pulses = useRef<THREE.InstancedMesh>(null);
   const vesicles = useRef<THREE.InstancedMesh>(null);
@@ -281,20 +341,31 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
       }),
     [POST],
   );
+  const myelinPlacements = useMemo(
+    () =>
+      [0.05, 0.22, 0.39, 0.56, 0.73].map((u) => ({
+        u,
+        position: parts.axon.getPoint(u),
+        quaternion: new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          parts.axon.getTangent(u),
+        ),
+      })),
+    [parts],
+  );
 
   useFrame(() => {
     const l = live.current;
     const d = l.drive;
-    soma.emissiveIntensity = 0.1 + 0.9 * d.nerveAmp;
-    process.emissiveIntensity = 0.1 + 0.6 * d.nerveAmp;
+    mats.soma.emissiveIntensity = 0.1 + 0.9 * d.nerveAmp;
+    mats.process.emissiveIntensity = 0.1 + 0.6 * d.nerveAmp;
 
     const acc = advance(clock.current, l.t, 0.16 * d.nerveRate);
     const p = pulses.current;
     if (p) {
       p.count = Math.max(1, Math.round(PULSES * d.nerveAmp));
       for (let i = 0; i < p.count; i++) {
-        const u = (acc + i / PULSES) % 1;
-        dummy.position.copy(parts.axon.getPoint(u));
+        dummy.position.copy(parts.axon.getPoint((acc + i / PULSES) % 1));
         dummy.scale.setScalar(0.085 * (0.5 + 0.5 * d.nerveAmp));
         dummy.updateMatrix();
         p.setMatrixAt(i, dummy.matrix);
@@ -308,9 +379,7 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
       v.count = Math.round(2 + (VESICLES - 2) * d.nerveAmp * (0.4 + 0.6 * d.a));
       for (let i = 0; i < v.count; i++) {
         const q = (racc + i / VESICLES) % 1;
-        const from = BULBS[i % 3]!;
-        const to = targets[i % RECEPTORS]!;
-        dummy.position.lerpVectors(from, to, q);
+        dummy.position.lerpVectors(BULBS[i % 3]!, targets[i % RECEPTORS]!, q);
         dummy.position.y += Math.sin(q * 9 + i) * 0.06;
         dummy.position.z += Math.cos(q * 7 + i) * 0.06;
         dummy.scale.setScalar(0.04 * (1 - 0.3 * q));
@@ -321,11 +390,11 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
     }
     const r = receptors.current;
     if (r) {
-      // Receptors light up (grow) when neurotransmitter keeps arriving.
       for (let i = 0; i < RECEPTORS; i++) {
         dummy.position.copy(targets[i]!);
         dummy.lookAt(POST);
-        dummy.scale.setScalar(0.07 * (1 + 0.5 * d.nerveAmp * Math.max(0, Math.sin(l.t * 4 + i))));
+        dummy.rotateX(Math.PI / 2);
+        dummy.scale.setScalar(0.2 * (1 + 0.5 * d.nerveAmp * Math.max(0, Math.sin(l.t * 4 + i))));
         dummy.updateMatrix();
         r.setMatrixAt(i, dummy.matrix);
       }
@@ -335,58 +404,35 @@ export const Neuron = memo(function Neuron({ live }: { live: RefObject<Live> }) 
 
   return (
     <group position={NERVE_AT}>
-      <mesh position={[-2.7, 0, 0]} material={soma}>
-        <sphereGeometry args={[0.5, 32, 24]} />
-      </mesh>
-      <mesh position={[-2.7, 0, 0]}>
-        <sphereGeometry args={[0.2, 20, 16]} />
-        <meshStandardMaterial color="#99f6e4" emissive="#5eead4" emissiveIntensity={0.5} />
-      </mesh>
+      <pointLight position={[-1.5, 2.2, 3]} color="#bffcf0" intensity={3.2} distance={11} />
+      <pointLight position={[3, -1.5, 2]} color="#93c5fd" intensity={2.4} distance={11} />
+      <mesh position={[-2.7, 0, 0]} geometry={parts.soma} material={mats.soma} />
+      <mesh position={[-2.7, 0, 0]} geometry={parts.nucleus} material={mats.nucleus} />
       {parts.dendrites.map((g, i) => (
-        <mesh key={i} geometry={g} material={process} />
+        <mesh key={i} geometry={g} material={mats.process} />
       ))}
-      <mesh geometry={parts.axonGeo} material={process} />
-      {[0.05, 0.22, 0.39, 0.56, 0.73].map((u) => {
-        const at = parts.axon.getPoint(u);
-        const tan = parts.axon.getTangent(u);
-        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
-        return (
-          <mesh key={u} position={at} quaternion={q}>
-            <capsuleGeometry args={[0.11, 0.42, 6, 14]} />
-            <meshStandardMaterial
-              color="#fde68a"
-              emissive="#f59e0b"
-              emissiveIntensity={0.25}
-              transparent
-              opacity={0.75}
-            />
-          </mesh>
-        );
-      })}
-      {BULBS.map((b, i) => (
-        <mesh key={i} position={b}>
-          <sphereGeometry args={[0.15, 16, 12]} />
-          <meshStandardMaterial color="#5eead4" emissive="#14b8a6" emissiveIntensity={0.6} />
-        </mesh>
-      ))}
-      <mesh position={POST}>
-        <sphereGeometry args={[1.6, 32, 24]} />
-        <meshStandardMaterial
-          color="#1e3a8a"
-          emissive="#3b82f6"
-          emissiveIntensity={0.2}
-          transparent
-          opacity={0.4}
-          side={THREE.DoubleSide}
-          depthWrite={false}
+      <mesh geometry={parts.axonGeo} material={mats.process} />
+      {myelinPlacements.map((m) => (
+        <mesh
+          key={m.u}
+          position={m.position}
+          quaternion={m.quaternion}
+          geometry={parts.myelin}
+          material={mats.myelin}
+          scale={[1, 1.15, 1]}
         />
-      </mesh>
-      <instancedMesh ref={receptors} args={[undefined, undefined, RECEPTORS]} frustumCulled={false}>
-        <coneGeometry args={[1, 2, 8]} />
-        <meshStandardMaterial color="#93c5fd" emissive="#60a5fa" emissiveIntensity={0.8} />
-      </instancedMesh>
+      ))}
+      {BULBS.map((b, i) => (
+        <mesh key={i} position={b} geometry={parts.bulb} material={mats.bulb} />
+      ))}
+      <mesh position={POST} geometry={parts.post} material={mats.post} />
+      <instancedMesh
+        ref={receptors}
+        args={[parts.receptor, mats.receptor, RECEPTORS]}
+        frustumCulled={false}
+      />
       <instancedMesh ref={pulses} args={[undefined, undefined, PULSES]} frustumCulled={false}>
-        <sphereGeometry args={[1, 12, 10]} />
+        <icosahedronGeometry args={[1, 2]} />
         <meshBasicMaterial color="#cffafe" toneMapped={false} />
       </instancedMesh>
       <instancedMesh ref={vesicles} args={[undefined, undefined, VESICLES]} frustumCulled={false}>
@@ -425,6 +471,24 @@ export const Receptor = memo(function Receptor({
   const clock = useRef({ t: 0, acc: 0 });
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const pocketX = (j: number) => -1.2 + j * 0.8;
+  const geo = useMemo(() => receptorGeometry(), []);
+  const mats = useMemo(
+    () => ({
+      lipid: organic("#38bdf8", { emissive: new THREE.Color("#0369a1"), emissiveIntensity: 0.4 }),
+      free: organic("#a78bfa", { emissive: new THREE.Color("#6d28d9"), emissiveIntensity: 0.6 }),
+      bound: organic("#fbbf24", { emissive: new THREE.Color("#f59e0b"), emissiveIntensity: 0.9 }),
+      blocker: organic("#dc2626", { emissive: new THREE.Color("#ef4444"), emissiveIntensity: 0.9 }),
+      slab: organic("#0c4a6e", { transparent: true, opacity: 0.25, depthWrite: false }),
+    }),
+    [],
+  );
+  useDispose(geo);
+  useEffect(
+    () => () => {
+      Object.values(mats).forEach((m) => m.dispose());
+    },
+    [mats],
+  );
 
   // The lipid bilayer never moves: write its matrices once.
   useEffect(() => {
@@ -461,11 +525,10 @@ export const Receptor = memo(function Receptor({
           const wander = (acc * (0.6 + rand(i, 41) * 0.4) + rand(i, 42)) % 1;
           // A blocker keeps adrenaline from ever reaching the pockets.
           const zMin = blocked ? 1.1 : 0.75;
-          const z = 3 - wander * (3 - zMin);
           dummy.position.set(
             pocketX(j) + Math.sin(acc * 3 + i) * 0.35,
             Math.cos(acc * 2.4 + i * 2) * 0.55,
-            z,
+            3 - wander * (3 - zMin),
           );
           dummy.scale.setScalar(0.085);
         }
@@ -497,43 +560,37 @@ export const Receptor = memo(function Receptor({
 
   return (
     <group position={SIGNAL_AT}>
+      <pointLight position={[0, 2, 3.5]} color="#ffe9c7" intensity={3} distance={10} />
+      <pointLight position={[-2, -1.5, -2]} color="#c4b5fd" intensity={2.2} distance={10} />
       <instancedMesh
         ref={lipids}
-        args={[undefined, undefined, LIPIDS_X * LIPIDS_Y * 2]}
+        args={[undefined, mats.lipid, LIPIDS_X * LIPIDS_Y * 2]}
         frustumCulled={false}
       >
-        <sphereGeometry args={[1, 10, 8]} />
-        <meshStandardMaterial color="#38bdf8" emissive="#0369a1" emissiveIntensity={0.5} />
+        <icosahedronGeometry args={[1, 2]} />
       </instancedMesh>
-      <mesh>
-        <boxGeometry args={[3.8, 2.3, 0.3]} />
-        <meshStandardMaterial color="#0c4a6e" transparent opacity={0.25} depthWrite={false} />
+      <mesh material={mats.slab}>
+        <planeGeometry args={[3.8, 2.3]} />
       </mesh>
-      {[0, 1, 2, 3].map((j) => {
-        const isBound = j < bound;
-        return (
-          <group key={j} position={[pocketX(j), 0, 0]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.13, 0.13, 1.0, 14]} />
-              <meshStandardMaterial
-                color={isBound ? "#fbbf24" : "#a78bfa"}
-                emissive={isBound ? "#f59e0b" : "#6d28d9"}
-                emissiveIntensity={0.7}
-              />
-            </mesh>
-            <mesh position={[0, 0, 0.5]}>
-              <torusGeometry args={[0.2, 0.05, 8, 18]} />
-              <meshStandardMaterial color="#c4b5fd" emissive="#8b5cf6" emissiveIntensity={0.6} />
-            </mesh>
-            {blocked && (
-              <mesh position={[0, 0, 0.55]}>
-                <boxGeometry args={[0.3, 0.3, 0.18]} />
-                <meshStandardMaterial color="#dc2626" emissive="#ef4444" emissiveIntensity={0.9} />
-              </mesh>
-            )}
-          </group>
-        );
-      })}
+      {[0, 1, 2, 3].map((j) => (
+        <group key={j} position={[pocketX(j), 0, 0]}>
+          <mesh
+            geometry={geo}
+            material={j < bound ? mats.bound : mats.free}
+            rotation={[Math.PI / 2, 0, 0]}
+            scale={[1.1, 1.5, 1.1]}
+          />
+          {blocked && (
+            <mesh
+              geometry={geo}
+              material={mats.blocker}
+              position={[0, 0, 0.62]}
+              rotation={[Math.PI / 2, 0, 0]}
+              scale={[0.5, 0.4, 0.5]}
+            />
+          )}
+        </group>
+      ))}
       <instancedMesh ref={molecules} args={[undefined, undefined, MOLECULES]} frustumCulled={false}>
         <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial
@@ -544,7 +601,7 @@ export const Receptor = memo(function Receptor({
         />
       </instancedMesh>
       <instancedMesh ref={signals} args={[undefined, undefined, SIGNALS]} frustumCulled={false}>
-        <sphereGeometry args={[1, 8, 6]} />
+        <icosahedronGeometry args={[1, 1]} />
         <meshBasicMaterial color="#e879f9" toneMapped={false} />
       </instancedMesh>
     </group>
