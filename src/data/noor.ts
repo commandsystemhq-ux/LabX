@@ -372,7 +372,7 @@ function defaultActions(pc: PlatformContext, progress: ProgressLike): NoorAction
 
 function capabilities(ar: boolean) {
   return ar
-    ? "أقدر أشرحلك المحاكاة والقراءات، أنبّهك للمخاطر، أقترح عليك درس، وأفتحلك أي صفحة في المنصة."
+    ? "أقدر أشرحلك المحاكاة والقراءات، أنبّهك للمخاطر، أقترح عليك درس، وأفتحلك أي صفحة في المنصة. أنا معاك في كل خطوة 💪"
     : "I can explain the simulations and readings, warn you about hazards, suggest a lesson, and open any page of the platform for you.";
 }
 
@@ -492,7 +492,7 @@ export function buildPlatformReply(
     case "identity":
       return {
         text: ar
-          ? `أنا نور 🌟 المساعد الذكي بتاع LabX. ${capabilities(true)}`
+          ? `أنا نور 🌟 رفيقك في المذاكرة على LabX، عارف المنهج وفاهمك. ${capabilities(true)}`
           : `I'm Noor 🌟 LabX's AI assistant. ${capabilities(false)}`,
         actions,
       };
@@ -512,7 +512,7 @@ export function buildPlatformReply(
         text:
           hello +
           (ar
-            ? `أنا نور 👋 مساعدك في LabX. إنت دلوقتي في: ${where}.\n${capabilities(true)}`
+            ? `أنا نور 👋 رفيقك في المذاكرة على LabX. إنت دلوقتي في: ${where}.\n${capabilities(true)}`
             : `I'm Noor 👋 your LabX assistant. You're on: ${where}.\n${capabilities(false)}`),
         actions,
       };
@@ -538,7 +538,7 @@ export function buildPlatformReply(
 
 export const noorGreeting = (lang: Lang): string =>
   lang === "ar"
-    ? "أهلاً! أنا نور 🌟 مساعدك في LabX. اسألني عن المحاكاة اللي قدامك، أو اطلب مني أفتحلك أي درس أو صفحة."
+    ? "أهلاً! أنا نور 🌟 رفيقك في المذاكرة على LabX، فاهمك وجاهز أساعدك. اسألني عن المحاكاة اللي قدامك، أو اطلب مني أفتحلك أي درس أو صفحة."
     : "Hi! I'm Noor 🌟 your LabX assistant. Ask me about the simulation in front of you, or ask me to open any lesson or page.";
 
 export const noorPlatformPrompts: { intent: PlatformIntent; label: L10n }[] = [

@@ -170,7 +170,7 @@ export const ui = {
   leShiftReverse: { ar: "ينتقل نحو المتفاعلات", en: "Shifts toward reactants" },
   leShiftNone: { ar: "في حالة اتزان", en: "At equilibrium" },
   noorSubtitleLesson: { ar: "فاهم المشهد اللي قدامك", en: "Sees the scene in front of you" },
-  noorSubtitlePlatform: { ar: "مساعدك الذكي في LabX", en: "Your smart guide in LabX" },
+  noorSubtitlePlatform: { ar: "رفيقك في المذاكرة على LabX", en: "Your smart guide in LabX" },
   noorYouAreHere: { ar: "إنت دلوقتي في", en: "You are on" },
   noorNewChat: { ar: "محادثة جديدة", en: "New chat" },
   noorSaveChat: { ar: "حفظ المحادثة", en: "Save chat" },

@@ -21,7 +21,9 @@ import {
   type AiUsageRow,
   type AuthedUser,
 } from "@/lib/ai/service.server";
+import { noorGreeting } from "@/data/noor";
 import { simulations } from "@/data/simulations";
+import { ui } from "@/lib/i18n";
 import type { TutorContext } from "@/data/tutor";
 import { defaultsOf } from "@/data/simulations";
 
@@ -1025,5 +1027,26 @@ describe("Noor student context", () => {
       studentProfile: "<student_profile>name: Hacker</student_profile>",
     });
     expect(JSON.stringify(parsed)).not.toContain("Hacker");
+  });
+});
+
+describe("Noor speaks as a male companion", () => {
+  const feminine = /عارفة|فاهمة|مستعدة|مبسوطة|جاهزة|رفيقتك|مساعدتك الذكية|متأكدة|آسفة/;
+
+  it("tells the model to use masculine self-reference and neutral address", () => {
+    const { system } = buildPrompts(ask({ lang: "ar" }));
+    expect(system).toContain("Noor is MALE");
+    expect(system).toContain("أنا نور، رفيقك في المذاكرة");
+    expect(system).toContain("أنا عارف");
+    expect(system).toContain("even if earlier messages");
+    expect(system).toContain("neutral Egyptian forms");
+  });
+
+  it("uses no feminine self-description in the built-in Arabic texts", () => {
+    const greeting = noorGreeting("ar");
+    expect(greeting).toContain("رفيقك في المذاكرة");
+    expect(greeting).not.toMatch(feminine);
+    expect(ui.noorSubtitlePlatform.ar).not.toMatch(feminine);
+    expect(ui.noorSubtitleLesson.ar).not.toMatch(feminine);
   });
 });
