@@ -13,6 +13,7 @@ import {
   type SaveSettingsInput,
 } from "@/lib/ai-config";
 import { decryptJson, encryptJson, isValidEncryptionKey } from "./crypto.server";
+import { buildStudentProfile, formatStudentProfile } from "./student-context.server";
 import {
   buildPrompts,
   callAzure,
@@ -43,11 +44,17 @@ export interface AuthedUser {
   id: string;
   /** From app_metadata, which only the service role can write (user_metadata is user-editable). */
   role: string | null;
+  /** user_metadata.display_name: user-editable free text, only ever used after sanitising. */
+  displayName?: string | null;
+  /** Used only to guess a first name when there is no display name; never put in a prompt. */
+  email?: string | null;
 }
 
 export interface AiStore {
   /** Validates the access token with Supabase Auth. Null for anything invalid / expired. */
   getUser(accessToken: string): Promise<AuthedUser | null>;
+  /** The saved progress state of exactly this user (null when none). Throws on I/O errors. */
+  loadProgress(userId: string): Promise<unknown>;
   loadSettings(): Promise<AiSettingsRow>;
   saveSettings(patch: Partial<Omit<AiSettingsRow, "updated_at">>, updatedBy: string): Promise<void>;
   loadUsage(): Promise<AiUsageRow>;
@@ -188,7 +195,20 @@ export function createAiService(deps: AiServiceDeps) {
 
         if (!allow(user.id)) return { ok: false, reason: "rate" };
 
-        const prompts = buildPrompts(input, config.extraInstructions);
+        const progress = await store.loadProgress(user.id).catch(() => null);
+        const profile = buildStudentProfile({
+          role: user.role,
+          displayName: user.displayName,
+          email: user.email,
+          progress,
+          viewingGrade: input.grade,
+          lang: input.lang,
+        });
+        const prompts = buildPrompts(
+          input,
+          config.extraInstructions,
+          formatStudentProfile(profile),
+        );
         try {
           const text =
             provider === "bedrock"

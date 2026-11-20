@@ -50,6 +50,7 @@ const asString = (v: unknown) => (typeof v === "string" ? v : null);
 /** Store used when the service-role key is missing: every call is a safe "nothing configured". */
 const unconfiguredStore: AiStore = {
   getUser: async () => null,
+  loadProgress: async () => null,
   loadSettings: async () => DEFAULT_ROW,
   saveSettings: async () => {
     throw new Error("server not configured");
@@ -64,7 +65,24 @@ function supabaseStore(client: SupabaseClient): AiStore {
       const { data, error } = await client.auth.getUser(accessToken);
       if (error || !data.user) return null;
       const role = data.user.app_metadata?.["role"];
-      return { id: data.user.id, role: typeof role === "string" ? role : null };
+      const name = data.user.user_metadata?.["display_name"];
+      return {
+        id: data.user.id,
+        role: typeof role === "string" ? role : null,
+        displayName: typeof name === "string" ? name : null,
+        email: data.user.email ?? null,
+      };
+    },
+
+    /** Only ever called with the id of the user the access token resolved to. */
+    async loadProgress(userId) {
+      const { data, error } = await client
+        .from("user_progress")
+        .select("state")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as { state?: unknown } | null)?.state ?? null;
     },
 
     async loadSettings() {

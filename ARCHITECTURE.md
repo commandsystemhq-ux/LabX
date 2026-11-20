@@ -31,7 +31,7 @@ src/lib/
   ai-tutor.functions.ts  server functions الوحيدة (askAiTutorFn/adminGet/adminSave) — تستورد ai/*.server.ts ديناميكياً داخل الـ handler
   ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً؛ يرسل آخر الرسائل + تلخيصاً للأقدم
   noor-chat.ts, use-noor-chat.ts   ذاكرة محادثة نور: localStorage (مفتاح لكل حساب + ضيف) + صف `noor_conversations` للمسجَّل (RLS)، sanitize لكل ما يُقرأ، chatContext (آخر 8 رسائل + ملخص ≤1000 حرف)؛ «حفظ المحادثة» يدوي فقط (useSavedChats): عنوان تلقائي من أول سؤال، حتى 30 محادثة، صف `noor_saved_chats` للمسجَّل (RLS للمالك، بلا update) و localStorage للزائر وكاحتياط إن تعذّر الجدول
-  ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، sigv4 (توقيع AWS SigV4)، providers (Bedrock: API key أو IAM، Azure: max_completion_tokens مع fallback)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
+  ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، sigv4 (توقيع AWS SigV4)، student-context (ملف الطالب لنور: اسم معقَّم + تقدّم نفس المستخدم فقط من user_progress، يُحقن كبلوك `<student_profile>` بيانات في الـ system prompt)، providers (Bedrock: API key أو IAM، Azure: max_completion_tokens مع fallback)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
 supabase/schema.sql    جدول user_progress + noor_conversations + noor_saved_chats (RLS للمالك فقط) + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
 .env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
   error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
