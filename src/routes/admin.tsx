@@ -1,17 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Activity, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   azureInput,
   bedrockInput,
+  bedrockModelWarning,
   DEFAULT_AZURE_API_VERSION,
+  GENERATION,
+  IAM_KEY_IN_API_KEY,
+  type AiErrorHint,
   type AiProvider,
   type AiTestResult,
+  type BedrockApiMode,
+  type BedrockAuthMode,
   type PublicAiSettings,
 } from "@/lib/ai-config";
 import {
@@ -36,12 +43,26 @@ interface Form {
   provider: AiProvider;
   bedrockRegion: string;
   bedrockModel: string;
+  bedrockAuth: BedrockAuthMode;
+  bedrockApiMode: BedrockApiMode;
   bedrockKey: string;
+  bedrockAccessKeyId: string;
+  bedrockSecretKey: string;
+  bedrockSessionToken: string;
+  bedrockClearSession: boolean;
+  bedrockMaxTokens: string;
+  bedrockTemperature: string;
+  bedrockTimeout: string;
+  bedrockInstructions: string;
   azureEndpoint: string;
   azureDeployment: string;
   azureVersion: string;
   azureRegion: string;
   azureKey: string;
+  azureMaxTokens: string;
+  azureTemperature: string;
+  azureTimeout: string;
+  azureInstructions: string;
 }
 
 const emptyForm: Form = {
@@ -49,12 +70,40 @@ const emptyForm: Form = {
   provider: "bedrock",
   bedrockRegion: "",
   bedrockModel: "",
+  bedrockAuth: "apikey",
+  bedrockApiMode: "converse",
   bedrockKey: "",
+  bedrockAccessKeyId: "",
+  bedrockSecretKey: "",
+  bedrockSessionToken: "",
+  bedrockClearSession: false,
+  bedrockMaxTokens: String(GENERATION.maxTokens.def),
+  bedrockTemperature: String(GENERATION.temperature.def),
+  bedrockTimeout: String(GENERATION.timeoutSec.def),
+  bedrockInstructions: "",
   azureEndpoint: "",
   azureDeployment: "",
   azureVersion: DEFAULT_AZURE_API_VERSION,
   azureRegion: "",
   azureKey: "",
+  azureMaxTokens: String(GENERATION.maxTokens.def),
+  azureTemperature: String(GENERATION.temperature.def),
+  azureTimeout: String(GENERATION.timeoutSec.def),
+  azureInstructions: "",
+};
+
+/** Empty = use the server default; anything else is parsed (NaN fails validation, flagging the field). */
+const num = (s: string) => (s.trim() === "" ? undefined : Number(s));
+
+const HINT_KEYS: Record<AiErrorHint, UiKey> = {
+  inference_profile: "adminHintInferenceProfile",
+  model_access: "adminHintModelAccess",
+  model_invalid: "adminHintModelInvalid",
+  bad_credentials: "adminHintBadCredentials",
+  bad_signature: "adminHintBadSignature",
+  deployment_not_found: "adminHintDeployment",
+  bad_key: "adminHintBadKey",
+  timeout: "adminHintTimeout",
 };
 
 function toForm(s: PublicAiSettings): Form {
@@ -63,12 +112,26 @@ function toForm(s: PublicAiSettings): Form {
     provider: s.activeProvider,
     bedrockRegion: s.bedrock?.region ?? "",
     bedrockModel: s.bedrock?.modelId ?? "",
+    bedrockAuth: s.bedrock?.authMode ?? "apikey",
+    bedrockApiMode: s.bedrock?.apiMode ?? "converse",
     bedrockKey: "",
+    bedrockAccessKeyId: "",
+    bedrockSecretKey: "",
+    bedrockSessionToken: "",
+    bedrockClearSession: false,
+    bedrockMaxTokens: String(s.bedrock?.maxTokens ?? GENERATION.maxTokens.def),
+    bedrockTemperature: String(s.bedrock?.temperature ?? GENERATION.temperature.def),
+    bedrockTimeout: String(s.bedrock?.timeoutSec ?? GENERATION.timeoutSec.def),
+    bedrockInstructions: s.bedrock?.extraInstructions ?? "",
     azureEndpoint: s.azure?.endpoint ?? "",
     azureDeployment: s.azure?.deployment ?? "",
     azureVersion: s.azure?.apiVersion ?? DEFAULT_AZURE_API_VERSION,
     azureRegion: s.azure?.region ?? "",
     azureKey: "",
+    azureMaxTokens: String(s.azure?.maxTokens ?? GENERATION.maxTokens.def),
+    azureTemperature: String(s.azure?.temperature ?? GENERATION.temperature.def),
+    azureTimeout: String(s.azure?.timeoutSec ?? GENERATION.timeoutSec.def),
+    azureInstructions: s.azure?.extraInstructions ?? "",
   };
 }
 
@@ -124,6 +187,7 @@ function AdminPage() {
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
     setNotice(null);
+    if (key === "provider") setTest(null);
     setBadFields((b) => b.filter((x) => !x.startsWith(String(key))));
   };
 
@@ -132,18 +196,39 @@ function AdminPage() {
     if (saving || !settings) return;
 
     const bad: string[] = [];
-    const hasBedrock = form.bedrockRegion.trim() || form.bedrockModel.trim() || form.bedrockKey;
+    const iam = form.bedrockAuth === "iam";
+    const hasBedrock =
+      form.bedrockRegion.trim() ||
+      form.bedrockModel.trim() ||
+      form.bedrockKey ||
+      form.bedrockAccessKeyId ||
+      form.bedrockSecretKey;
     const hasAzure = form.azureEndpoint.trim() || form.azureDeployment.trim() || form.azureKey;
 
+    // Only the chosen method's secrets are sent; blank secrets mean "keep the stored one".
     const bedrock = hasBedrock
       ? bedrockInput.safeParse({
           region: form.bedrockRegion,
           modelId: form.bedrockModel,
-          ...(form.bedrockKey ? { apiKey: form.bedrockKey } : {}),
+          authMode: form.bedrockAuth,
+          apiMode: form.bedrockApiMode,
+          ...(!iam && form.bedrockKey ? { apiKey: form.bedrockKey } : {}),
+          ...(iam && form.bedrockAccessKeyId ? { accessKeyId: form.bedrockAccessKeyId } : {}),
+          ...(iam && form.bedrockSecretKey ? { secretAccessKey: form.bedrockSecretKey } : {}),
+          ...(iam && form.bedrockSessionToken ? { sessionToken: form.bedrockSessionToken } : {}),
+          ...(iam && form.bedrockClearSession ? { clearSessionToken: true } : {}),
+          maxTokens: num(form.bedrockMaxTokens),
+          temperature: num(form.bedrockTemperature),
+          timeoutSec: num(form.bedrockTimeout),
+          extraInstructions: form.bedrockInstructions,
         })
       : null;
+    let keyShape = false;
     if (bedrock && !bedrock.success) {
-      for (const i of bedrock.error.issues) bad.push(`bedrock${String(i.path[0] ?? "")}`);
+      for (const i of bedrock.error.issues) {
+        bad.push(`bedrock${String(i.path[0] ?? "")}`);
+        if (i.message === IAM_KEY_IN_API_KEY) keyShape = true;
+      }
     }
     const azure = hasAzure
       ? azureInput.safeParse({
@@ -152,6 +237,10 @@ function AdminPage() {
           apiVersion: form.azureVersion,
           region: form.azureRegion,
           ...(form.azureKey ? { apiKey: form.azureKey } : {}),
+          maxTokens: num(form.azureMaxTokens),
+          temperature: num(form.azureTemperature),
+          timeoutSec: num(form.azureTimeout),
+          extraInstructions: form.azureInstructions,
         })
       : null;
     if (azure && !azure.success) {
@@ -159,7 +248,7 @@ function AdminPage() {
     }
     if (bad.length) {
       setBadFields(bad);
-      setNotice({ tone: "error", key: "adminErrInvalid" });
+      setNotice({ tone: "error", key: keyShape ? "adminIamKeyInApiKey" : "adminErrInvalid" });
       return;
     }
 
@@ -199,7 +288,7 @@ function AdminPage() {
     }
   };
 
-  /** Tries the saved settings of the active provider and shows its real (redacted) error. */
+  /** Tries the SAVED settings of the selected provider and shows its real (redacted) error. */
   const runTest = async () => {
     if (testing || !settings) return;
     setTesting(true);
@@ -207,18 +296,24 @@ function AdminPage() {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error("no session");
-      const res = await adminTestAiFn({ data: { accessToken } });
+      const res = await adminTestAiFn({ data: { accessToken, provider: form.provider } });
       if (res.ok) setTest(res.data);
       else if (res.reason === "forbidden" || res.reason === "auth") setLoad("forbidden");
-      else setTest({ ok: false, reason: "provider_error", provider: settings.activeProvider });
+      else setTest({ ok: false, reason: "provider_error", provider: form.provider });
     } catch {
-      setTest({ ok: false, reason: "provider_error", provider: settings.activeProvider });
+      setTest({ ok: false, reason: "provider_error", provider: form.provider });
     } finally {
       setTesting(false);
     }
   };
 
   const bad = (name: string) => badFields.includes(name);
+  const dirty = useMemo(
+    () => (settings ? JSON.stringify(form) !== JSON.stringify(toForm(settings)) : false),
+    [form, settings],
+  );
+  const modelWarning = bedrockModelWarning(form.bedrockRegion, form.bedrockModel);
+  const iamSaved = settings?.bedrock?.authMode === "iam" && settings.bedrock.hasKey;
 
   return (
     <div className="min-h-screen">
@@ -352,25 +447,147 @@ function AdminPage() {
                     aria-invalid={bad("bedrockmodelId")}
                   />
                 </Field>
-                <Field
-                  id="br-key"
-                  label={t("adminApiKey")}
-                  hint={t("adminBedrockKeyHint")}
-                  invalid={bad("bedrockapiKey") || bad("bedrock")}
-                  wide
-                >
-                  <Input
+                {modelWarning && (
+                  <p className="text-[11px] text-warning sm:col-span-2" role="note">
+                    {t("adminModelMismatch")}
+                  </p>
+                )}
+                <RadioRow
+                  legend={t("adminApiMode")}
+                  name="br-api-mode"
+                  value={form.bedrockApiMode}
+                  onChange={(v) => set("bedrockApiMode", v)}
+                  options={[
+                    ["converse", t("adminApiModeConverse")],
+                    ["invoke", t("adminApiModeInvoke")],
+                  ]}
+                />
+                <RadioRow
+                  legend={t("adminAuthMethod")}
+                  name="br-auth"
+                  value={form.bedrockAuth}
+                  onChange={(v) => set("bedrockAuth", v)}
+                  options={[
+                    ["apikey", t("adminAuthApiKey")],
+                    ["iam", t("adminAuthIam")],
+                  ]}
+                />
+                {form.bedrockAuth === "apikey" ? (
+                  <Field
                     id="br-key"
-                    type="password"
-                    dir="ltr"
-                    autoComplete="new-password"
-                    maxLength={512}
-                    value={form.bedrockKey}
-                    placeholder={settings.bedrock?.hasKey ? t("adminApiKeyKept") : ""}
-                    onChange={(e) => set("bedrockKey", e.target.value)}
-                    aria-invalid={bad("bedrockapiKey")}
-                  />
-                </Field>
+                    label={t("adminApiKey")}
+                    hint={t("adminBedrockKeyHint")}
+                    invalid={bad("bedrockapiKey") || bad("bedrock")}
+                    wide
+                  >
+                    <Input
+                      id="br-key"
+                      type="password"
+                      dir="ltr"
+                      autoComplete="new-password"
+                      maxLength={4096}
+                      value={form.bedrockKey}
+                      placeholder={
+                        settings.bedrock?.authMode === "apikey" && settings.bedrock.hasKey
+                          ? t("adminApiKeyKept")
+                          : ""
+                      }
+                      onChange={(e) => set("bedrockKey", e.target.value)}
+                      aria-invalid={bad("bedrockapiKey")}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                      {t("adminIamHint")}
+                    </p>
+                    <Field
+                      id="br-akid"
+                      label={t("adminAccessKeyId")}
+                      invalid={bad("bedrockaccessKeyId") || bad("bedrock")}
+                    >
+                      <Input
+                        id="br-akid"
+                        type="password"
+                        dir="ltr"
+                        autoComplete="new-password"
+                        maxLength={128}
+                        value={form.bedrockAccessKeyId}
+                        placeholder={iamSaved ? t("adminApiKeyKept") : ""}
+                        onChange={(e) => set("bedrockAccessKeyId", e.target.value)}
+                        aria-invalid={bad("bedrockaccessKeyId")}
+                      />
+                    </Field>
+                    <Field
+                      id="br-secret"
+                      label={t("adminSecretKey")}
+                      invalid={bad("bedrocksecretAccessKey") || bad("bedrock")}
+                    >
+                      <Input
+                        id="br-secret"
+                        type="password"
+                        dir="ltr"
+                        autoComplete="new-password"
+                        maxLength={128}
+                        value={form.bedrockSecretKey}
+                        placeholder={iamSaved ? t("adminApiKeyKept") : ""}
+                        onChange={(e) => set("bedrockSecretKey", e.target.value)}
+                        aria-invalid={bad("bedrocksecretAccessKey")}
+                      />
+                    </Field>
+                    <Field
+                      id="br-session"
+                      label={t("adminSessionToken")}
+                      invalid={bad("bedrocksessionToken")}
+                      wide
+                    >
+                      <Input
+                        id="br-session"
+                        type="password"
+                        dir="ltr"
+                        autoComplete="new-password"
+                        maxLength={4096}
+                        value={form.bedrockSessionToken}
+                        placeholder={
+                          iamSaved && settings.bedrock?.hasSessionToken ? t("adminSessionKept") : ""
+                        }
+                        onChange={(e) => set("bedrockSessionToken", e.target.value)}
+                        aria-invalid={bad("bedrocksessionToken")}
+                      />
+                      {iamSaved && settings.bedrock?.hasSessionToken && (
+                        <label className="mt-1 flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={form.bedrockClearSession}
+                            onChange={(e) => set("bedrockClearSession", e.target.checked)}
+                            className="size-4 accent-[var(--subject)]"
+                          />
+                          {t("adminClearSession")}
+                        </label>
+                      )}
+                    </Field>
+                  </>
+                )}
+                <GenerationFields
+                  id="br"
+                  maxLabel={t("adminMaxTokens")}
+                  tempHint={t("adminTemperatureHintBedrock")}
+                  tempMax={GENERATION.temperature.bedrockMax}
+                  maxTokens={form.bedrockMaxTokens}
+                  temperature={form.bedrockTemperature}
+                  timeout={form.bedrockTimeout}
+                  instructions={form.bedrockInstructions}
+                  onMaxTokens={(v) => set("bedrockMaxTokens", v)}
+                  onTemperature={(v) => set("bedrockTemperature", v)}
+                  onTimeout={(v) => set("bedrockTimeout", v)}
+                  onInstructions={(v) => set("bedrockInstructions", v)}
+                  invalid={{
+                    maxTokens: bad("bedrockmaxTokens"),
+                    temperature: bad("bedrocktemperature"),
+                    timeout: bad("bedrocktimeoutSec"),
+                    instructions: bad("bedrockextraInstructions"),
+                  }}
+                />
               </div>
             </section>
 
@@ -455,6 +672,26 @@ function AdminPage() {
                     aria-invalid={bad("azureapiKey")}
                   />
                 </Field>
+                <GenerationFields
+                  id="az"
+                  maxLabel={t("adminMaxCompletionTokens")}
+                  tempHint={t("adminTemperatureHintAzure")}
+                  tempMax={GENERATION.temperature.azureMax}
+                  maxTokens={form.azureMaxTokens}
+                  temperature={form.azureTemperature}
+                  timeout={form.azureTimeout}
+                  instructions={form.azureInstructions}
+                  onMaxTokens={(v) => set("azureMaxTokens", v)}
+                  onTemperature={(v) => set("azureTemperature", v)}
+                  onTimeout={(v) => set("azureTimeout", v)}
+                  onInstructions={(v) => set("azureInstructions", v)}
+                  invalid={{
+                    maxTokens: bad("azuremaxTokens"),
+                    temperature: bad("azuretemperature"),
+                    timeout: bad("azuretimeoutSec"),
+                    instructions: bad("azureextraInstructions"),
+                  }}
+                />
               </div>
             </section>
 
@@ -521,6 +758,15 @@ function AdminPage() {
               <p className="text-[11px] text-muted-foreground">{t("adminTestHint")}</p>
             </div>
 
+            {dirty && (
+              <p
+                role="alert"
+                className="rounded-2xl border border-warning/50 bg-warning/10 p-3 text-sm"
+              >
+                {t("adminDirty")}
+              </p>
+            )}
+
             {test && (
               <div
                 role={test.ok ? "status" : "alert"}
@@ -530,12 +776,20 @@ function AdminPage() {
                 }
               >
                 {test.ok ? (
-                  <p>
-                    {t("adminTestOk")}{" "}
-                    <span className="font-mono text-xs" dir="ltr">
-                      {test.provider} · {test.ms} ms
-                    </span>
-                  </p>
+                  <div>
+                    <p>
+                      {t("adminTestOk")}{" "}
+                      <span className="font-mono text-xs" dir="ltr">
+                        {test.provider} · {test.ms} ms
+                      </span>
+                    </p>
+                    <p className="mt-1 break-words text-xs text-muted-foreground">
+                      {t("adminTestTarget")}{" "}
+                      <span className="font-mono" dir="ltr">
+                        {test.target}
+                      </span>
+                    </p>
+                  </div>
                 ) : test.reason === "not_configured" ? (
                   <p>{t("adminTestNotConfigured")}</p>
                 ) : (
@@ -547,6 +801,15 @@ function AdminPage() {
                         {test.status ? ` · HTTP ${test.status}` : ""}
                       </span>
                     </p>
+                    {test.target && (
+                      <p className="mt-1 break-words text-xs text-muted-foreground">
+                        {t("adminTestTarget")}{" "}
+                        <span className="font-mono" dir="ltr">
+                          {test.target}
+                        </span>
+                      </p>
+                    )}
+                    {test.hint && <p className="mt-2 text-sm">{t(HINT_KEYS[test.hint])}</p>}
                     {test.detail && (
                       <p className="mt-1 break-words font-mono text-xs" dir="ltr">
                         {test.detail}
@@ -586,6 +849,157 @@ function Field({
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
+  );
+}
+
+function RadioRow<T extends string>({
+  legend,
+  name,
+  value,
+  onChange,
+  options,
+}: {
+  legend: string;
+  name: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: readonly (readonly [T, string])[];
+}) {
+  return (
+    <fieldset className="sm:col-span-2">
+      <legend className="text-sm font-bold">{legend}</legend>
+      <div role="radiogroup" className="mt-2 grid gap-2 sm:grid-cols-2">
+        {options.map(([id, label]) => (
+          <label
+            key={id}
+            className={
+              "flex cursor-pointer items-center gap-3 rounded-2xl border p-3 text-sm font-semibold transition-colors " +
+              (value === id ? "border-subject bg-subject/10" : "border-border hover:bg-accent/40")
+            }
+          >
+            <input
+              type="radio"
+              name={name}
+              value={id}
+              checked={value === id}
+              onChange={() => onChange(id)}
+              className="size-4 accent-[var(--subject)]"
+            />
+            <span dir="ltr">{label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function GenerationFields({
+  id,
+  maxLabel,
+  tempHint,
+  tempMax,
+  maxTokens,
+  temperature,
+  timeout,
+  instructions,
+  onMaxTokens,
+  onTemperature,
+  onTimeout,
+  onInstructions,
+  invalid,
+}: {
+  id: string;
+  maxLabel: string;
+  tempHint: string;
+  tempMax: number;
+  maxTokens: string;
+  temperature: string;
+  timeout: string;
+  instructions: string;
+  onMaxTokens: (v: string) => void;
+  onTemperature: (v: string) => void;
+  onTimeout: (v: string) => void;
+  onInstructions: (v: string) => void;
+  invalid: { maxTokens: boolean; temperature: boolean; timeout: boolean; instructions: boolean };
+}) {
+  const { t } = useLang();
+  return (
+    <>
+      <h3 className="text-sm font-bold sm:col-span-2">{t("adminGeneration")}</h3>
+      <Field
+        id={`${id}-max`}
+        label={maxLabel}
+        hint={t("adminMaxTokensHint")}
+        invalid={invalid.maxTokens}
+      >
+        <Input
+          id={`${id}-max`}
+          type="number"
+          inputMode="numeric"
+          dir="ltr"
+          min={GENERATION.maxTokens.min}
+          max={GENERATION.maxTokens.max}
+          step={1}
+          value={maxTokens}
+          onChange={(e) => onMaxTokens(e.target.value)}
+          aria-invalid={invalid.maxTokens}
+        />
+      </Field>
+      <Field
+        id={`${id}-temp`}
+        label={t("adminTemperature")}
+        hint={tempHint}
+        invalid={invalid.temperature}
+      >
+        <Input
+          id={`${id}-temp`}
+          type="number"
+          inputMode="decimal"
+          dir="ltr"
+          min={0}
+          max={tempMax}
+          step={0.1}
+          value={temperature}
+          onChange={(e) => onTemperature(e.target.value)}
+          aria-invalid={invalid.temperature}
+        />
+      </Field>
+      <Field
+        id={`${id}-timeout`}
+        label={t("adminTimeout")}
+        hint={t("adminTimeoutHint")}
+        invalid={invalid.timeout}
+      >
+        <Input
+          id={`${id}-timeout`}
+          type="number"
+          inputMode="numeric"
+          dir="ltr"
+          min={GENERATION.timeoutSec.min}
+          max={GENERATION.timeoutSec.max}
+          step={1}
+          value={timeout}
+          onChange={(e) => onTimeout(e.target.value)}
+          aria-invalid={invalid.timeout}
+        />
+      </Field>
+      <Field
+        id={`${id}-instr`}
+        label={t("adminInstructions")}
+        hint={t("adminInstructionsHint")}
+        invalid={invalid.instructions}
+        wide
+      >
+        <Textarea
+          id={`${id}-instr`}
+          rows={3}
+          maxLength={GENERATION.instructionsMax}
+          value={instructions}
+          onChange={(e) => onInstructions(e.target.value)}
+          aria-invalid={invalid.instructions}
+        />
+      </Field>
+    </>
   );
 }
 

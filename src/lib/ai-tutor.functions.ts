@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { adminAccessInput, askTutorInput, saveSettingsInput } from "./ai-config";
+import { adminAccessInput, adminTestInput, askTutorInput, saveSettingsInput } from "./ai-config";
 
 /**
  * Server functions are the only door to the AI provider and its settings. The `*.server.ts`
@@ -28,8 +28,8 @@ export const adminSaveAiSettingsFn = createServerFn({ method: "POST" })
   });
 
 export const adminTestAiFn = createServerFn({ method: "POST" })
-  .validator(adminAccessInput)
+  .validator(adminTestInput)
   .handler(async ({ data }) => {
     const { getAiService } = await import("./ai/store.server");
-    return getAiService().adminTest(data.accessToken);
+    return getAiService().adminTest(data.accessToken, data.provider);
   });

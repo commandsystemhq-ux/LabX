@@ -30,7 +30,7 @@ src/lib/
   ai-config.ts         (مشترك) schemas zod + أنواع إعدادات الـ AI؛ لا أسرار ولا I/O
   ai-tutor.functions.ts  server functions الوحيدة (askAiTutorFn/adminGet/adminSave) — تستورد ai/*.server.ts ديناميكياً داخل الـ handler
   ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً
-  ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، providers (Bedrock/Azure)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
+  ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، sigv4 (توقيع AWS SigV4)، providers (Bedrock: API key أو IAM، Azure: max_completion_tokens مع fallback)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
 supabase/schema.sql    جدول user_progress + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
 .env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
   error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
@@ -116,4 +116,4 @@ auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSu
 - نشاط الأسبوع تقدير من وقت آخر تحديث لكل درس (لا يوجد تتبع زمن فعلي).
 - «نور» لا تتنقل بنفسها: الردود (المحلية أو من الـ AI) قد تحمل أزرار تنقل فقط، من قائمة بيضاء (`home` / `dashboard` / `lesson` بمعرّف موجود فعلاً / `auth`)، والطالب هو من يضغط. وسوم `[[go:…]]` القادمة من الـ AI تُتحقَّق وتُحذف من النص. أي نوع إجراء جديد يُضاف في `data/noor.ts` مع تحقق.
 - فشل المزوّد لا يُعرض للطالب أبداً؛ الأدمن يرى السبب الحقيقي (منقّحاً من المفتاح) من زر «اختبار الاتصال» في `/admin` ومن لوغ السيرفر.
-- الـ LLM يُستدعى من السيرفر فقط ولمستخدم مسجَّل فقط (الضيف يأخذ الردود المحلية)؛ Bedrock عبر Bedrock API key (Bearer) لا SigV4؛ الـ rate limit في ذاكرة السيرفر (best-effort عند تعدد النسخ)؛ كل سؤال مستقل (بدون سجل محادثة).
+- الـ LLM يُستدعى من السيرفر فقط ولمستخدم مسجَّل فقط (الضيف يأخذ الردود المحلية)؛ Bedrock عبر Bedrock API key (Bearer) أو IAM credentials بتوقيع SigV4 (مسار `/converse` أو `/invoke`، والـ Model ID قد يكون id مباشراً أو Inference Profile أو ARN)؛ إعدادات التوليد (tokens/temperature/timeout/تعليمات نور) تُخزَّن مشفّرة مع كل مزوّد؛ الـ rate limit في ذاكرة السيرفر (best-effort عند تعدد النسخ)؛ كل سؤال مستقل (بدون سجل محادثة).

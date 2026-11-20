@@ -9,10 +9,18 @@ import {
   type AzureConfig,
   type BedrockConfig,
   type PublicAiSettings,
+  type PublicGeneration,
   type SaveSettingsInput,
 } from "@/lib/ai-config";
 import { decryptJson, encryptJson, isValidEncryptionKey } from "./crypto.server";
-import { buildPrompts, callAzure, callBedrock, ProviderError } from "./providers.server";
+import {
+  buildPrompts,
+  callAzure,
+  callBedrock,
+  classifyProviderError,
+  generationOf,
+  ProviderError,
+} from "./providers.server";
 
 /** AI tutor business logic. All I/O goes through `AiStore`, so it can be tested without Supabase. */
 
@@ -58,6 +66,24 @@ export interface AiServiceDeps {
 }
 
 const CONTEXT = { bedrock: "ai_settings:bedrock", azure: "ai_settings:azure" } as const;
+
+const publicGeneration = (
+  c: Parameters<typeof generationOf>[0] & { extraInstructions?: string | undefined },
+): PublicGeneration => {
+  const g = generationOf(c);
+  return {
+    maxTokens: g.maxTokens,
+    temperature: g.temperature,
+    timeoutSec: g.timeoutMs / 1000,
+    extraInstructions: c.extraInstructions ?? "",
+  };
+};
+
+/** Non-secret description of what a connection test used. */
+const describeTarget = (provider: AiProvider, config: BedrockConfig | AzureConfig) =>
+  provider === "bedrock"
+    ? `${(config as BedrockConfig).modelId} · ${(config as BedrockConfig).authMode === "iam" ? "IAM SigV4" : "API key"} · ${(config as BedrockConfig).apiMode ?? "converse"}`
+    : (config as AzureConfig).deployment;
 
 export function createAiService(deps: AiServiceDeps) {
   const { store, encryptionKey } = deps;
@@ -111,7 +137,17 @@ export function createAiService(deps: AiServiceDeps) {
     return {
       enabled: row.enabled,
       activeProvider: row.active_provider,
-      bedrock: bedrock ? { region: bedrock.region, modelId: bedrock.modelId, hasKey: true } : null,
+      bedrock: bedrock
+        ? {
+            region: bedrock.region,
+            modelId: bedrock.modelId,
+            authMode: bedrock.authMode ?? "apikey",
+            apiMode: bedrock.apiMode ?? "converse",
+            hasKey: true,
+            hasSessionToken: Boolean(bedrock.sessionToken),
+            ...publicGeneration(bedrock),
+          }
+        : null,
       azure: azure
         ? {
             endpoint: azure.endpoint,
@@ -119,6 +155,7 @@ export function createAiService(deps: AiServiceDeps) {
             apiVersion: azure.apiVersion,
             region: azure.region,
             hasKey: true,
+            ...publicGeneration(azure),
           }
         : null,
       updatedAt: row.updated_at,
@@ -151,7 +188,7 @@ export function createAiService(deps: AiServiceDeps) {
 
         if (!allow(user.id)) return { ok: false, reason: "rate" };
 
-        const prompts = buildPrompts(input);
+        const prompts = buildPrompts(input, config.extraInstructions);
         try {
           const text =
             provider === "bedrock"
@@ -182,13 +219,19 @@ export function createAiService(deps: AiServiceDeps) {
       }
     },
 
-    /** Runs one tiny request through the active provider and reports the real error to the admin. */
-    async adminTest(accessToken: string): Promise<AdminResult<AiTestResult>> {
+    /**
+     * Runs one tiny request with the SAVED settings of the requested provider (default: the saved
+     * active one) and reports the real error to the admin.
+     */
+    async adminTest(
+      accessToken: string,
+      requested?: AiProvider,
+    ): Promise<AdminResult<AiTestResult>> {
       const gate = await requireAdmin(accessToken);
       if ("reason" in gate) return { ok: false, reason: gate.reason };
       try {
         const row = await store.loadSettings();
-        const provider = row.active_provider;
+        const provider = requested ?? row.active_provider;
         const config =
           provider === "bedrock"
             ? await readConfig<BedrockConfig>(row, "bedrock", bedrockStored)
@@ -198,6 +241,7 @@ export function createAiService(deps: AiServiceDeps) {
         }
 
         const prompts = { system: "Reply with the single word OK.", user: "ping" };
+        const target = describeTarget(provider, config);
         const started = now();
         try {
           if (provider === "bedrock") {
@@ -205,17 +249,20 @@ export function createAiService(deps: AiServiceDeps) {
           } else {
             await callAzure(config as AzureConfig, prompts, deps.fetchImpl);
           }
-          return { ok: true, data: { ok: true, provider, ms: now() - started } };
+          return { ok: true, data: { ok: true, provider, ms: now() - started, target } };
         } catch (error) {
           const e = error instanceof ProviderError ? error : null;
+          const hint = classifyProviderError(provider, e?.status, e?.detail);
           return {
             ok: true,
             data: {
               ok: false,
               reason: "provider_error",
               provider,
+              target,
               ...(e?.status !== undefined ? { status: e.status } : {}),
               ...(e?.detail ? { detail: e.detail } : {}),
+              ...(hint ? { hint } : {}),
             },
           };
         }
@@ -232,23 +279,50 @@ export function createAiService(deps: AiServiceDeps) {
         const row = await store.loadSettings();
         const patch: Parameters<AiStore["saveSettings"]>[0] = {};
 
-        const nextBedrock = input.bedrock
-          ? {
-              ...input.bedrock,
-              apiKey:
-                input.bedrock.apiKey ??
-                (await readConfig<BedrockConfig>(row, "bedrock", bedrockStored))?.apiKey,
-            }
-          : null;
-        if (nextBedrock) {
-          const parsed = bedrockStored.safeParse(nextBedrock);
-          if (!parsed.success) return { ok: false, reason: "invalid", fields: ["bedrock.apiKey"] };
+        if (input.bedrock) {
+          const { clearSessionToken, ...incoming } = input.bedrock;
+          const stored = await readConfig<BedrockConfig>(row, "bedrock", bedrockStored);
+          const authMode = incoming.authMode ?? stored?.authMode ?? "apikey";
+          // Only the chosen method's secrets are kept; the other method's are dropped.
+          const secrets =
+            authMode === "iam"
+              ? {
+                  accessKeyId: incoming.accessKeyId ?? stored?.accessKeyId,
+                  secretAccessKey: incoming.secretAccessKey ?? stored?.secretAccessKey,
+                  // A new key pair must not inherit the old pair's session token.
+                  sessionToken: clearSessionToken
+                    ? undefined
+                    : (incoming.sessionToken ??
+                      (incoming.accessKeyId || incoming.secretAccessKey
+                        ? undefined
+                        : stored?.sessionToken)),
+                }
+              : { apiKey: incoming.apiKey ?? stored?.apiKey };
+          const candidate = {
+            region: incoming.region,
+            modelId: incoming.modelId,
+            authMode,
+            apiMode: incoming.apiMode ?? stored?.apiMode,
+            maxTokens: incoming.maxTokens,
+            temperature: incoming.temperature,
+            timeoutSec: incoming.timeoutSec,
+            extraInstructions: incoming.extraInstructions || undefined,
+            ...secrets,
+          };
+          const parsed = bedrockStored.safeParse(candidate);
+          if (!parsed.success) {
+            const fields = [
+              ...new Set(parsed.error.issues.map((i) => `bedrock.${i.path[0] ?? ""}`)),
+            ];
+            return { ok: false, reason: "invalid", fields };
+          }
           patch.bedrock_config = await encryptJson(parsed.data, encryptionKey, CONTEXT.bedrock);
         }
 
         const nextAzure = input.azure
           ? {
               ...input.azure,
+              extraInstructions: input.azure.extraInstructions || undefined,
               apiKey:
                 input.azure.apiKey ??
                 (await readConfig<AzureConfig>(row, "azure", azureStored))?.apiKey,
@@ -256,7 +330,10 @@ export function createAiService(deps: AiServiceDeps) {
           : null;
         if (nextAzure) {
           const parsed = azureStored.safeParse(nextAzure);
-          if (!parsed.success) return { ok: false, reason: "invalid", fields: ["azure.apiKey"] };
+          if (!parsed.success) {
+            const fields = [...new Set(parsed.error.issues.map((i) => `azure.${i.path[0] ?? ""}`))];
+            return { ok: false, reason: "invalid", fields };
+          }
           patch.azure_config = await encryptJson(parsed.data, encryptionKey, CONTEXT.azure);
         }
 

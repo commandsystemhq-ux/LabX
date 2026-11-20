@@ -13,18 +13,36 @@ export const MAX_QUESTION = 300;
 
 const REGION_RE = /^[a-z]{2}(?:-[a-z]+)+-\d{1,2}$/;
 const BEDROCK_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,199}$/;
+/** Bedrock ARNs (inference / application profiles, foundation models); the account id may be empty. */
+const BEDROCK_ARN_RE =
+  /^arn:aws(?:-[a-z]+)*:bedrock:[a-z]{2}(?:-[a-z]+)+-\d{1,2}:\d{0,12}:(?:inference-profile|application-inference-profile|foundation-model|provisioned-model|imported-model|custom-model)\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const AZURE_DEPLOYMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const AZURE_VERSION_RE = /^\d{4}-\d{2}-\d{2}(?:-preview)?$/;
 const AZURE_HOST_RE = /^[a-z0-9][a-z0-9-]{0,62}\.(?:openai|cognitiveservices)\.azure\.com$/;
 
+export const BEDROCK_AUTH_MODES = ["apikey", "iam"] as const;
+export type BedrockAuthMode = (typeof BEDROCK_AUTH_MODES)[number];
+export const BEDROCK_API_MODES = ["converse", "invoke"] as const;
+export type BedrockApiMode = (typeof BEDROCK_API_MODES)[number];
+
+/** Generation limits shared by the admin form, the server schemas and the provider calls. */
+export const GENERATION = {
+  maxTokens: { min: 16, max: 4096, def: 450 },
+  timeoutSec: { min: 3, max: 60, def: 20 },
+  temperature: { def: 0.4, bedrockMax: 1, azureMax: 2 },
+  instructionsMax: 1000,
+} as const;
+
 /**
  * Azure resource endpoints only: https, no credentials, no custom port, and an Azure hostname.
  * Anything else is rejected so an admin typo (or a stolen admin session) can't aim the server at
- * an internal address. Returns the normalised origin, or null.
+ * an internal address. A missing scheme is tolerated; any path or trailing `/` is dropped.
+ * Returns the normalised origin, or null.
  */
 export function normalizeAzureEndpoint(raw: string): string | null {
   try {
-    const u = new URL(raw.trim());
+    const text = raw.trim();
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`);
     if (u.protocol !== "https:" || u.username || u.password || u.port) return null;
     if (!AZURE_HOST_RE.test(u.hostname)) return null;
     return `https://${u.hostname}`;
@@ -41,14 +59,82 @@ const secret = z
   .max(512)
   .regex(/^[\x21-\x7e]+$/);
 
+/** Pasted credentials often carry spaces, line breaks or a "Bearer " prefix: drop them first. */
+const stripSpaces = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, "") : v);
+const cleanBearer = (v: unknown) =>
+  typeof v === "string"
+    ? v
+        .trim()
+        .replace(/^bearer\s+/i, "")
+        .replace(/\s+/g, "")
+    : v;
+
+/** An IAM access key id (AKIA… / ASIA…) pasted where a Bedrock API key belongs is a common mistake. */
+const IAM_KEY_ID_RE = /^(?:AKIA|ASIA|AIDA|AROA)[A-Z0-9]{12,}$/;
+export const IAM_KEY_IN_API_KEY = "iam_key_in_api_key";
+
+const bearerKey = z.preprocess(
+  cleanBearer,
+  z
+    .string()
+    .min(8)
+    .max(4096)
+    .regex(/^[\x21-\x7e]+$/)
+    .refine((v) => !(v.length <= 24 && IAM_KEY_ID_RE.test(v)), { message: IAM_KEY_IN_API_KEY }),
+);
+const accessKeyId = z.preprocess(stripSpaces, z.string().regex(/^[A-Z0-9]{16,128}$/));
+const secretAccessKey = z.preprocess(stripSpaces, z.string().regex(/^[A-Za-z0-9/+=]{30,128}$/));
+const sessionToken = z.preprocess(
+  stripSpaces,
+  z
+    .string()
+    .min(16)
+    .max(4096)
+    .regex(/^[\x21-\x7e]+$/),
+);
+
 const region = z.string().trim().regex(REGION_RE).max(30);
 
-/** What the admin form sends for Bedrock. `apiKey` omitted = keep the stored key. */
-export const bedrockInput = z.object({
-  region,
-  modelId: z.string().trim().regex(BEDROCK_MODEL_RE),
-  apiKey: secret.optional(),
+const bedrockModelId = z
+  .string()
+  .trim()
+  .refine((v) => BEDROCK_MODEL_RE.test(v) || (v.length <= 300 && BEDROCK_ARN_RE.test(v)));
+
+/** Generation settings stored (encrypted) with each provider; omitted = the defaults above. */
+const generation = (maxTemperature: number) => ({
+  maxTokens: z
+    .number()
+    .int()
+    .min(GENERATION.maxTokens.min)
+    .max(GENERATION.maxTokens.max)
+    .optional(),
+  temperature: z.number().min(0).max(maxTemperature).optional(),
+  timeoutSec: z
+    .number()
+    .int()
+    .min(GENERATION.timeoutSec.min)
+    .max(GENERATION.timeoutSec.max)
+    .optional(),
+  extraInstructions: z.string().trim().max(GENERATION.instructionsMax).optional(),
 });
+
+const bedrockBase = z.object({
+  region,
+  modelId: bedrockModelId,
+  authMode: z.enum(BEDROCK_AUTH_MODES).optional(),
+  apiMode: z.enum(BEDROCK_API_MODES).optional(),
+  apiKey: bearerKey.optional(),
+  accessKeyId: accessKeyId.optional(),
+  secretAccessKey: secretAccessKey.optional(),
+  sessionToken: sessionToken.optional(),
+  ...generation(GENERATION.temperature.bedrockMax),
+});
+
+/**
+ * What the admin form sends for Bedrock. Every secret omitted = keep the stored one; only the
+ * secrets of the chosen `authMode` (default `apikey`) are kept.
+ */
+export const bedrockInput = bedrockBase.extend({ clearSessionToken: z.boolean().optional() });
 
 /** What the admin form sends for Azure OpenAI. `apiKey` omitted = keep the stored key. */
 export const azureInput = z.object({
@@ -68,18 +154,58 @@ export const azureInput = z.object({
     .max(40)
     .regex(/^[a-z0-9-]*$/)
     .default(""),
-  apiKey: secret.optional(),
+  apiKey: z.preprocess(stripSpaces, secret).optional(),
+  ...generation(GENERATION.temperature.azureMax),
 });
 
-/** The decrypted shapes stored in Supabase (key always present). */
-export const bedrockStored = bedrockInput.extend({ apiKey: secret });
-export const azureStored = azureInput.extend({ apiKey: secret });
+/** The decrypted shapes stored in Supabase (the credentials of the chosen mode always present). */
+export const bedrockStored = bedrockBase.superRefine((c, ctx) => {
+  const missing =
+    (c.authMode ?? "apikey") === "iam"
+      ? [!c.accessKeyId && "accessKeyId", !c.secretAccessKey && "secretAccessKey"]
+      : [!c.apiKey && "apiKey"];
+  for (const field of missing) {
+    if (field) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: "required" });
+  }
+});
+export const azureStored = azureInput.extend({ apiKey: z.preprocess(stripSpaces, secret) });
 export type BedrockConfig = z.infer<typeof bedrockStored>;
 export type AzureConfig = z.infer<typeof azureStored>;
+
+/** Soft warning for a Model ID that can't work in the chosen region (inference-profile prefix / ARN region). */
+export function bedrockModelWarning(regionValue: string, modelId: string): boolean {
+  const id = modelId.trim();
+  const reg = regionValue.trim();
+  if (!reg || !id) return false;
+  if (id.startsWith("arn:")) return (id.split(":")[3] ?? reg) !== reg;
+  const geo = /^(us-gov|us|eu|apac)\./.exec(id)?.[1];
+  if (!geo) return false;
+  const prefix = reg.startsWith("us-gov-") ? "us-gov" : (reg.split("-")[0] ?? "");
+  return geo !== (prefix === "ap" ? "apac" : prefix);
+}
+
+/** Admin-facing explanation codes for common provider failures (mapped to bilingual text in the UI). */
+export const AI_ERROR_HINTS = [
+  "inference_profile",
+  "model_access",
+  "model_invalid",
+  "bad_credentials",
+  "bad_signature",
+  "deployment_not_found",
+  "bad_key",
+  "timeout",
+] as const;
+export type AiErrorHint = (typeof AI_ERROR_HINTS)[number];
 
 const accessToken = z.string().min(20).max(4096);
 
 export const adminAccessInput = z.object({ accessToken });
+
+export const adminTestInput = z.object({
+  accessToken,
+  /** Which provider's saved settings to test; defaults to the saved active one. */
+  provider: z.enum(AI_PROVIDERS).optional(),
+});
 
 export const saveSettingsInput = z.object({
   accessToken,
@@ -129,18 +255,38 @@ export type AskTutorInput = z.infer<typeof askTutorInput>;
 export type AskTutorResult =
   { ok: true; text: string } | { ok: false; reason: "disabled" | "auth" | "rate" | "error" };
 
+/** Generation settings as shown to the admin (defaults filled in). */
+export interface PublicGeneration {
+  maxTokens: number;
+  temperature: number;
+  timeoutSec: number;
+  extraInstructions: string;
+}
+
 /** What the admin page may see: never any key, only whether one is stored. */
 export interface PublicAiSettings {
   enabled: boolean;
   activeProvider: AiProvider;
-  bedrock: { region: string; modelId: string; hasKey: boolean } | null;
-  azure: {
-    endpoint: string;
-    deployment: string;
-    apiVersion: string;
-    region: string;
-    hasKey: boolean;
-  } | null;
+  bedrock:
+    | ({
+        region: string;
+        modelId: string;
+        authMode: BedrockAuthMode;
+        apiMode: BedrockApiMode;
+        /** The credentials required by `authMode` are all stored. */
+        hasKey: boolean;
+        hasSessionToken: boolean;
+      } & PublicGeneration)
+    | null;
+  azure:
+    | ({
+        endpoint: string;
+        deployment: string;
+        apiVersion: string;
+        region: string;
+        hasKey: boolean;
+      } & PublicGeneration)
+    | null;
   updatedAt: string | null;
   usage: {
     requests: number;
@@ -154,13 +300,21 @@ export interface PublicAiSettings {
 
 /** Result of the admin's Test connection button: the real provider error, for the admin only. */
 export type AiTestResult =
-  | { ok: true; provider: AiProvider; ms: number }
+  | {
+      ok: true;
+      provider: AiProvider;
+      ms: number;
+      /** Non-secret description of what was tested (model / deployment + auth method). */
+      target: string;
+    }
   | {
       ok: false;
       reason: "not_configured" | "provider_error";
       provider: AiProvider;
       status?: number;
       detail?: string;
+      hint?: AiErrorHint;
+      target?: string;
     };
 
 export type AdminResult<T> =

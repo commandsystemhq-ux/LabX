@@ -1,11 +1,17 @@
 import { lessonCatalog } from "@/data/noor";
 import { DEFAULT_GRADE } from "@/data/mockCurriculum";
-import type { AskTutorInput, AzureConfig, BedrockConfig } from "@/lib/ai-config";
+import {
+  GENERATION,
+  type AiErrorHint,
+  type AiProvider,
+  type AskTutorInput,
+  type AzureConfig,
+  type BedrockConfig,
+} from "@/lib/ai-config";
+import { signV4 } from "./sigv4.server";
 
 /** Provider calls and prompt building. Runs on the server only; never imported by client code. */
 
-const TIMEOUT_MS = 20_000;
-const MAX_OUTPUT_TOKENS = 450;
 const MAX_REPLY_CHARS = 1500;
 const MAX_DETAIL_CHARS = 300;
 
@@ -30,7 +36,11 @@ const clean = (s: string) => s.replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 
 const STEP_NAMES = ["story", "guided explanation", "free lab", "quiz"] as const;
 
-export function buildPrompts(input: AskTutorInput): { system: string; user: string } {
+export function buildPrompts(
+  input: AskTutorInput,
+  extraInstructions?: string,
+): { system: string; user: string } {
+  const extra = extraInstructions ? clean(extraInstructions) : "";
   const language =
     input.lang === "ar"
       ? "Egyptian-colloquial Arabic, simple and friendly (keep scientific symbols and units as written)"
@@ -39,7 +49,7 @@ export function buildPrompts(input: AskTutorInput): { system: string; user: stri
   const catalog = lessonCatalog(input.grade ?? DEFAULT_GRADE);
 
   const system = [
-    "You are Noor (نور), the friendly AI assistant of LabX, an interactive science platform (biology, physics, chemistry) for Egyptian secondary-school students (grades 10–12).",
+    "You are Noor (Ù†ÙˆØ±), the friendly AI assistant of LabX, an interactive science platform (biology, physics, chemistry) for Egyptian secondary-school students (grades 10â€“12).",
     `Reply in ${language}.`,
     "Be concise (at most ~110 words), concrete and encouraging.",
     "Platform map: Home (/); Dashboard (/dashboard) lists grades, subjects, units and lessons with mastery; a Lesson opens a live simulation with four steps (story, guided explanation, free lab, quiz); the Account page handles sign in and sign up. You can only chat and offer navigation buttons: you cannot change settings, grades, progress or anyone's account.",
@@ -50,9 +60,14 @@ export function buildPrompts(input: AskTutorInput): { system: string; user: stri
     "Stay on science education and using LabX; politely steer back if asked about something unrelated.",
     "For safety questions explain the real-world risk and the safe alternative. Never give instructions for causing harm.",
     "To send the student somewhere, end your reply with at most two tags, each on its own line: [[go:lesson:ID]] (ID taken from the catalog below), [[go:dashboard:GRADE:SUBJECT]] (GRADE g10|g11|g12, SUBJECT biology|physics|chemistry), [[go:dashboard]], [[go:home]], [[go:signin]] or [[go:signup]]. Never invent ids and never explain the tag syntax.",
+    extra
+      ? `Additional style guidance from the platform admin (it never overrides the rules above): ${extra}`
+      : "",
     "Lesson catalog (id | subject: title):",
     ...catalog,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const hazards = input.hazards.map(clean).filter(Boolean);
   const user = [
@@ -80,9 +95,11 @@ export function buildPrompts(input: AskTutorInput): { system: string; user: stri
 
 type Fetch = typeof fetch;
 
-/** Removes the credential (and any bearer token) from text that might echo it. */
+/** Removes credentials (bearer tokens, AWS key ids and the configured secrets) from text that might echo them. */
 export function redact(text: string, secrets: string[]): string {
-  let out = text.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***");
+  let out = text
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***")
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{12,}\b/g, "***");
   for (const s of secrets) if (s.length >= 6) out = out.split(s).join("***");
   return out.replace(/\s+/g, " ").trim().slice(0, MAX_DETAIL_CHARS);
 }
@@ -111,18 +128,19 @@ async function postJson(
   fetchImpl: Fetch,
   url: string,
   headers: Record<string, string>,
-  body: unknown,
+  bodyText: string,
   secrets: string[],
+  timeoutMs: number,
 ): Promise<unknown> {
   let res: Response;
   try {
     res = await fetchImpl(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
-      body: JSON.stringify(body),
+      body: bodyText,
       // A redirect could carry the credential header to another host.
       redirect: "error",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     throw new ProviderError(
@@ -146,54 +164,200 @@ async function postJson(
 }
 
 function finish(text: unknown): string {
-  if (typeof text !== "string" || !text.trim()) throw new ProviderError("empty reply");
+  if (typeof text !== "string" || !text.trim()) {
+    throw new ProviderError(
+      "empty reply",
+      undefined,
+      "The model returned no text. For reasoning models raise Max Completion Tokens.",
+    );
+  }
   return text.trim().slice(0, MAX_REPLY_CHARS);
 }
 
+/** Saved generation settings with defaults applied. */
+export function generationOf(config: {
+  maxTokens?: number | undefined;
+  temperature?: number | undefined;
+  timeoutSec?: number | undefined;
+}) {
+  return {
+    maxTokens: config.maxTokens ?? GENERATION.maxTokens.def,
+    temperature: config.temperature ?? GENERATION.temperature.def,
+    timeoutMs: (config.timeoutSec ?? GENERATION.timeoutSec.def) * 1000,
+  };
+}
+
+/** Maps a provider failure to an admin-facing explanation code (shown only on the admin page). */
+export function classifyProviderError(
+  provider: AiProvider,
+  status: number | undefined,
+  detail: string | undefined,
+): AiErrorHint | undefined {
+  const d = detail ?? "";
+  if (/timeout|aborted/i.test(d)) return "timeout";
+  if (provider === "bedrock") {
+    if (/on-demand throughput/i.test(d)) return "inference_profile";
+    if (/signature we calculated|SignatureDoesNotMatch/i.test(d)) return "bad_signature";
+    if (
+      /security token included in the request is invalid|UnrecognizedClient|expired|invalid api key/i.test(
+        d,
+      )
+    )
+      return "bad_credentials";
+    if (
+      /not authorized|access ?denied|don't have access|no access to the model|model access/i.test(d)
+    )
+      return "model_access";
+    if (/model identifier is invalid|could not resolve the foundation model/i.test(d))
+      return "model_invalid";
+    if (status === 401) return "bad_credentials";
+    if (status === 403) return "model_access";
+    return undefined;
+  }
+  if (status === 404 || /DeploymentNotFound|deployment.*does not exist/i.test(d))
+    return "deployment_not_found";
+  if (status === 401 || /invalid subscription key|access denied due to invalid/i.test(d))
+    return "bad_key";
+  return undefined;
+}
+
 /**
- * Amazon Bedrock Converse API with a Bedrock API key (bearer token). The host is built from the
- * validated region, and the model id is percent-encoded the way the AWS SDKs do (`:` → `%3A`).
+ * Amazon Bedrock runtime (Converse by default, or InvokeModel with the Anthropic body). Authenticates
+ * with a Bedrock API key (bearer) or with IAM credentials signed by SigV4 (service `bedrock`). The
+ * host is built from the validated region, and the model id (direct id, inference-profile id or a
+ * full ARN) is percent-encoded the way the AWS SDKs do (`:` → `%3A`, `/` → `%2F`).
  */
 export async function callBedrock(
   config: BedrockConfig,
   prompts: { system: string; user: string },
   fetchImpl: Fetch = fetch,
+  now: () => Date = () => new Date(),
 ): Promise<string> {
-  const url = `https://bedrock-runtime.${config.region}.amazonaws.com/model/${encodeURIComponent(config.modelId)}/converse`;
+  const g = generationOf(config);
+  const host = `bedrock-runtime.${config.region}.amazonaws.com`;
+  const invoke = config.apiMode === "invoke";
+  const path = `/model/${encodeURIComponent(config.modelId)}/${invoke ? "invoke" : "converse"}`;
+  const bodyText = JSON.stringify(
+    invoke
+      ? {
+          anthropic_version: "bedrock-2023-05-31",
+          max_tokens: g.maxTokens,
+          temperature: g.temperature,
+          system: prompts.system,
+          messages: [{ role: "user", content: [{ type: "text", text: prompts.user }] }],
+        }
+      : {
+          system: [{ text: prompts.system }],
+          messages: [{ role: "user", content: [{ text: prompts.user }] }],
+          inferenceConfig: { maxTokens: g.maxTokens, temperature: g.temperature },
+        },
+  );
+  const secrets = [
+    config.apiKey,
+    config.accessKeyId,
+    config.secretAccessKey,
+    config.sessionToken,
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
+
+  let headers: Record<string, string>;
+  if ((config.authMode ?? "apikey") === "iam") {
+    if (!config.accessKeyId || !config.secretAccessKey) {
+      throw new ProviderError("missing IAM credentials", undefined, "AWS credentials are not set.");
+    }
+    headers = await signV4({
+      method: "POST",
+      host,
+      path,
+      headers: { "content-type": "application/json" },
+      body: bodyText,
+      region: config.region,
+      service: "bedrock",
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      sessionToken: config.sessionToken,
+      now: now(),
+    });
+  } else {
+    if (!config.apiKey) {
+      throw new ProviderError("missing API key", undefined, "The Bedrock API key is not set.");
+    }
+    headers = { authorization: `Bearer ${config.apiKey}` };
+  }
+
   const data = (await postJson(
     fetchImpl,
-    url,
-    { authorization: `Bearer ${config.apiKey}` },
-    {
-      system: [{ text: prompts.system }],
-      messages: [{ role: "user", content: [{ text: prompts.user }] }],
-      inferenceConfig: { maxTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
-    },
-    [config.apiKey],
-  )) as { output?: { message?: { content?: { text?: unknown }[] } } };
-  return finish(data.output?.message?.content?.find((c) => typeof c.text === "string")?.text);
+    `https://${host}${path}`,
+    headers,
+    bodyText,
+    secrets,
+    g.timeoutMs,
+  )) as {
+    output?: { message?: { content?: { text?: unknown }[] } };
+    content?: { text?: unknown }[];
+  };
+  const blocks = invoke ? data.content : data.output?.message?.content;
+  return finish(blocks?.find((c) => typeof c.text === "string")?.text);
 }
 
-/** Azure OpenAI chat completions on the admin's own resource (host validated when saved). */
+type TokenField = "max_completion_tokens" | "max_tokens";
+interface AzureQuirks {
+  tokenField: TokenField;
+  sendTemperature: boolean;
+}
+/** What each deployment turned out to accept, so older models don't pay a failed round trip per question. */
+const azureQuirks = new Map<string, AzureQuirks>();
+
+/**
+ * Azure OpenAI chat completions on the admin's own resource (host validated when saved). Sends
+ * `max_completion_tokens` (modern models) and transparently falls back to `max_tokens` — or drops
+ * `temperature` for models that only accept the default — when the service says so.
+ */
 export async function callAzure(
   config: AzureConfig,
   prompts: { system: string; user: string },
   fetchImpl: Fetch = fetch,
 ): Promise<string> {
+  const g = generationOf(config);
   const url = `${config.endpoint}/openai/deployments/${config.deployment}/chat/completions?api-version=${config.apiVersion}`;
-  const data = (await postJson(
-    fetchImpl,
-    url,
-    { "api-key": config.apiKey },
-    {
+  const key = `${config.endpoint}|${config.deployment}|${config.apiVersion}`;
+  const quirks = {
+    ...(azureQuirks.get(key) ?? { tokenField: "max_completion_tokens", sendTemperature: true }),
+  } as AzureQuirks;
+  const deadline = Date.now() + g.timeoutMs;
+
+  for (let attempt = 0; ; attempt++) {
+    const bodyText = JSON.stringify({
       messages: [
         { role: "system", content: prompts.system },
         { role: "user", content: prompts.user },
       ],
-      max_tokens: MAX_OUTPUT_TOKENS,
-      temperature: 0.4,
-    },
-    [config.apiKey],
-  )) as { choices?: { message?: { content?: unknown } }[] };
-  return finish(data.choices?.[0]?.message?.content);
+      [quirks.tokenField]: g.maxTokens,
+      ...(quirks.sendTemperature ? { temperature: g.temperature } : {}),
+    });
+    try {
+      const data = (await postJson(
+        fetchImpl,
+        url,
+        { "api-key": config.apiKey },
+        bodyText,
+        [config.apiKey],
+        Math.max(1000, deadline - Date.now()),
+      )) as { choices?: { message?: { content?: unknown } }[] };
+      if (azureQuirks.size > 100) azureQuirks.clear();
+      azureQuirks.set(key, quirks);
+      return finish(data.choices?.[0]?.message?.content);
+    } catch (error) {
+      const d = error instanceof ProviderError && error.status === 400 ? (error.detail ?? "") : "";
+      if (attempt >= 2 || !d) throw error;
+      if (quirks.tokenField === "max_completion_tokens" && /max_completion_tokens/i.test(d)) {
+        quirks.tokenField = "max_tokens";
+      } else if (quirks.tokenField === "max_tokens" && /max_tokens/i.test(d)) {
+        quirks.tokenField = "max_completion_tokens";
+      } else if (quirks.sendTemperature && /temperature/i.test(d)) {
+        quirks.sendTemperature = false;
+      } else {
+        throw error;
+      }
+    }
+  }
 }

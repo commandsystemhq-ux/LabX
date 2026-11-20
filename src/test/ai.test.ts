@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   azureInput,
   bedrockInput,
+  bedrockModelWarning,
+  bedrockStored,
   normalizeAzureEndpoint,
   type AskTutorInput,
   type SaveSettingsInput,
@@ -10,6 +12,7 @@ import {
 import { requestAiReply, resetAiBackoff } from "@/lib/ai-tutor-client";
 import { decryptJson, encryptJson, isValidEncryptionKey } from "@/lib/ai/crypto.server";
 import { buildPrompts, callAzure, callBedrock, ProviderError } from "@/lib/ai/providers.server";
+import { signV4 } from "@/lib/ai/sigv4.server";
 import {
   createAiService,
   type AiSettingsRow,
@@ -296,7 +299,7 @@ describe("AI service: settings storage", () => {
     expect(JSON.stringify(m.row())).not.toContain("super-secret");
     expect(m.row().bedrock_config).toMatch(/^v1\./);
     if (first.ok) {
-      expect(first.data.bedrock).toEqual({ ...BEDROCK, hasKey: true });
+      expect(first.data.bedrock).toMatchObject({ ...BEDROCK, authMode: "apikey", hasKey: true });
       expect(first.data.enabled).toBe(true);
     }
 
@@ -556,5 +559,254 @@ describe("AI service: connection test", () => {
     });
     expect(JSON.stringify(r)).toContain("Access denied for key ***");
     expect(JSON.stringify(r)).not.toContain("bedrock-key-123456");
+  });
+});
+
+describe("Bedrock IAM (SigV4) and model ids", () => {
+  it("matches the AWS documented SigV4 example signature", async () => {
+    const headers = await signV4({
+      method: "GET",
+      host: "iam.amazonaws.com",
+      path: "/",
+      query: "Action=ListUsers&Version=2010-05-08",
+      headers: { "content-type": "application/x-www-form-urlencoded; charset=utf-8" },
+      body: "",
+      region: "us-east-1",
+      service: "iam",
+      accessKeyId: "AKIDEXAMPLE",
+      secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+      now: new Date("2015-08-30T12:36:00Z"),
+    });
+    expect(headers["authorization"]).toBe(
+      "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7",
+    );
+    expect(headers["host"]).toBeUndefined();
+  });
+
+  const prompts = { system: "s", user: "u" };
+  const iam = {
+    region: "eu-west-1",
+    authMode: "iam" as const,
+    accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+    secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+    sessionToken: "session-token-1234567890",
+  };
+
+  it("signs Converse calls for an inference profile ARN with the encoded path", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({ output: { message: { content: [{ text: "hi" }] } } }),
+    );
+    const arn =
+      "arn:aws:bedrock:eu-west-1:123456789012:inference-profile/eu.anthropic.claude-3-haiku-20240307-v1:0";
+    await callBedrock(
+      { ...iam, modelId: arn },
+      prompts,
+      fetchImpl as unknown as typeof fetch,
+      () => new Date("2026-01-02T03:04:05Z"),
+    );
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(
+      `https://bedrock-runtime.eu-west-1.amazonaws.com/model/${encodeURIComponent(arn)}/converse`,
+    );
+    const h = init.headers as Record<string, string>;
+    expect(h["authorization"]).toMatch(
+      /^AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE\/20260102\/eu-west-1\/bedrock\/aws4_request, SignedHeaders=content-type;host;x-amz-date;x-amz-security-token, Signature=[0-9a-f]{64}$/,
+    );
+    expect(h["x-amz-date"]).toBe("20260102T030405Z");
+    expect(h["x-amz-security-token"]).toBe("session-token-1234567890");
+    expect(init.redirect).toBe("error");
+  });
+
+  it("supports InvokeModel and never echoes IAM secrets in errors", async () => {
+    const ok = vi.fn(async () => Response.json({ content: [{ type: "text", text: "yo" }] }));
+    expect(
+      await callBedrock(
+        { ...iam, modelId: "global.anthropic.claude-sonnet-4", apiMode: "invoke" },
+        prompts,
+        ok as unknown as typeof fetch,
+      ),
+    ).toBe("yo");
+    expect((ok.mock.calls[0] as unknown as [string])[0]).toMatch(
+      /\/model\/global\.anthropic\.claude-sonnet-4\/invoke$/,
+    );
+
+    const leaky = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: `bad ${iam.secretAccessKey} ${iam.accessKeyId}` }), {
+          status: 403,
+        }),
+    );
+    const err = await callBedrock(
+      { ...iam, modelId: "anthropic.claude-3" },
+      prompts,
+      leaky as unknown as typeof fetch,
+    ).catch((e) => e);
+    expect(err.detail).toBe("bad *** ***");
+  });
+
+  it("cleans pasted keys, catches an Access Key ID in the API key field and checks the Region", () => {
+    const base = { region: "us-east-1", modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0" };
+    const spaced = bedrockInput.safeParse({ ...base, apiKey: "  Bearer  abcd efgh1234\n" });
+    expect(spaced.success && spaced.data.apiKey).toBe("abcdefgh1234");
+    const mistake = bedrockInput.safeParse({ ...base, apiKey: "AKIAIOSFODNN7EXAMPLE" });
+    expect(mistake.success).toBe(false);
+    expect(
+      bedrockInput.safeParse({
+        ...base,
+        modelId: "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0",
+      }).success,
+    ).toBe(true);
+    expect(bedrockInput.safeParse({ ...base, maxTokens: 5 }).success).toBe(false);
+    expect(bedrockInput.safeParse({ ...base, temperature: 1.5 }).success).toBe(false);
+    expect(
+      bedrockStored.safeParse({ ...base, authMode: "iam", accessKeyId: iam.accessKeyId }).success,
+    ).toBe(false);
+    expect(bedrockModelWarning("eu-west-1", "us.anthropic.claude")).toBe(true);
+    expect(bedrockModelWarning("us-east-1", "us.anthropic.claude")).toBe(false);
+    expect(bedrockModelWarning("eu-west-1", "global.anthropic.claude")).toBe(false);
+    expect(
+      bedrockModelWarning(
+        "eu-west-1",
+        "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.x.y",
+      ),
+    ).toBe(true);
+  });
+
+  it("service stores IAM keys encrypted, keeps them on partial updates and explains on-demand errors", async () => {
+    const denied = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            message:
+              "Invocation of model ID anthropic.claude-3-5-sonnet with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.",
+          }),
+          { status: 400 },
+        ),
+    ) as unknown as typeof fetch;
+    const m = memoryStore(USERS);
+    const svc = createAiService({ store: m.store, encryptionKey: KEY, fetchImpl: denied });
+    const first = await svc.adminSave(
+      save({
+        enabled: true,
+        activeProvider: "bedrock",
+        bedrock: {
+          ...BEDROCK,
+          authMode: "iam",
+          accessKeyId: iam.accessKeyId,
+          secretAccessKey: iam.secretAccessKey,
+          sessionToken: iam.sessionToken,
+        },
+      }),
+    );
+    expect(first.ok).toBe(true);
+    expect(JSON.stringify(first)).not.toContain(iam.secretAccessKey);
+    expect(JSON.stringify(m.row())).not.toContain(iam.secretAccessKey);
+    if (first.ok)
+      expect(first.data.bedrock).toMatchObject({
+        authMode: "iam",
+        hasKey: true,
+        hasSessionToken: true,
+        maxTokens: 450,
+      });
+
+    await svc.adminSave(
+      save({
+        bedrock: { ...BEDROCK, authMode: "iam", maxTokens: 300, extraInstructions: "Be brief" },
+      }),
+    );
+    const stored = await decryptJson(m.row().bedrock_config!, KEY, "ai_settings:bedrock");
+    expect(stored).toMatchObject({
+      accessKeyId: iam.accessKeyId,
+      sessionToken: iam.sessionToken,
+      maxTokens: 300,
+      extraInstructions: "Be brief",
+    });
+
+    // Switching back to an API key drops the IAM secrets.
+    await svc.adminSave(
+      save({ bedrock: { ...BEDROCK, authMode: "apikey", apiKey: "bedrock-key-123" } }),
+    );
+    const switched = await decryptJson(m.row().bedrock_config!, KEY, "ai_settings:bedrock");
+    expect(switched).toMatchObject({ authMode: "apikey", apiKey: "bedrock-key-123" });
+    expect(JSON.stringify(switched)).not.toContain(iam.secretAccessKey);
+
+    const r = await svc.adminTest(TOKEN("admin"));
+    expect(r).toMatchObject({
+      ok: true,
+      data: { ok: false, status: 400, hint: "inference_profile", provider: "bedrock" },
+    });
+  });
+});
+
+describe("Azure OpenAI generation compatibility", () => {
+  const prompts = { system: "s", user: "u" };
+  const cfg = (deployment: string) => ({
+    endpoint: "https://r.openai.azure.com",
+    deployment,
+    apiVersion: "2024-10-21",
+    region: "",
+    apiKey: "key-123456",
+    maxTokens: 321,
+    temperature: 0.7,
+    timeoutSec: 10,
+  });
+  const bodyOf = (f: ReturnType<typeof vi.fn>, i: number) =>
+    JSON.parse((f.mock.calls[i] as unknown as [string, RequestInit])[1].body as string) as Record<
+      string,
+      unknown
+    >;
+
+  it("uses max_completion_tokens and applies the saved generation settings", async () => {
+    const f = vi.fn(async () => Response.json({ choices: [{ message: { content: "ok" } }] }));
+    await callAzure(cfg("gpt-modern"), prompts, f as unknown as typeof fetch);
+    expect(bodyOf(f, 0)).toMatchObject({ max_completion_tokens: 321, temperature: 0.7 });
+    expect(bodyOf(f, 0)["max_tokens"]).toBeUndefined();
+  });
+
+  it("falls back to max_tokens for older models and remembers it", async () => {
+    let calls = 0;
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      calls++;
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      if ("max_completion_tokens" in body) {
+        return new Response(
+          JSON.stringify({
+            error: { message: "Unrecognized request argument supplied: max_completion_tokens" },
+          }),
+          { status: 400 },
+        );
+      }
+      return Response.json({ choices: [{ message: { content: "old ok" } }] });
+    });
+    expect(await callAzure(cfg("gpt-old"), prompts, f as unknown as typeof fetch)).toBe("old ok");
+    expect(calls).toBe(2);
+    expect(await callAzure(cfg("gpt-old"), prompts, f as unknown as typeof fetch)).toBe("old ok");
+    expect(calls).toBe(3);
+  });
+
+  it("drops an unsupported temperature and trims endpoint slashes", async () => {
+    let n = 0;
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      n++;
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      return "temperature" in body
+        ? new Response(
+            JSON.stringify({
+              error: {
+                message: "Unsupported value: 'temperature' does not support 0.7 with this model.",
+              },
+            }),
+            { status: 400 },
+          )
+        : Response.json({ choices: [{ message: { content: "reasoned" } }] });
+    });
+    expect(await callAzure(cfg("o-series"), prompts, f as unknown as typeof fetch)).toBe(
+      "reasoned",
+    );
+    expect(n).toBe(2);
+    expect(normalizeAzureEndpoint("https://r.openai.azure.com///")).toBe(
+      "https://r.openai.azure.com",
+    );
+    expect(normalizeAzureEndpoint("r.openai.azure.com/")).toBe("https://r.openai.azure.com");
   });
 });
