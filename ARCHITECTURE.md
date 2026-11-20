@@ -7,7 +7,7 @@
 ```
 src/routes/            الصفحات (file-based) — index (/)، auth (تسجيل/حساب)، admin (إدارة الـ AI، للأدمن فقط)، dashboard، lesson، __root (الـ shell + 404 + AuthProvider)
 src/components/
-  landing/ layout/     الصفحة الرئيسية، Navbar، Footer
+  landing/ layout/     الصفحة الرئيسية، Navbar، Footer؛ AppSidebar (AppShell يلفّ كل الصفحات في __root: شريط جانبي قابل للطي على /dashboard و/lesson و/admin فقط، يختفي في وضع السبورة، مطوي = أيقونات، الحالة في localStorage `labx.sidebar.v1`، درج off-canvas على الشاشات الصغيرة) + sidebar-context
   dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
   lesson/              مساحة الدرس بالكامل (انظر §4)
     scenes/            مشاهد SVG لكل محاكاة × منظور (macro/molecular) — مكان Three.js مستقبلاً

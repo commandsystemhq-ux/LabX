@@ -11,6 +11,7 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { AppShell } from "@/components/layout/AppSidebar";
 import { NoorAssistant } from "@/components/noor/NoorAssistant";
 import { NoorProvider } from "@/components/noor/NoorProvider";
 import { AuthProvider } from "@/lib/auth";
@@ -130,7 +131,9 @@ function RootComponent() {
       <LanguageProvider>
         <AuthProvider>
           <NoorProvider>
-            <Outlet />
+            <AppShell>
+              <Outlet />
+            </AppShell>
             <NoorAssistant />
           </NoorProvider>
         </AuthProvider>

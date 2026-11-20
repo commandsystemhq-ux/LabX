@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { LangToggle } from "@/components/common/LangToggle";
+import { SidebarToggle } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_GRADE, grades, type GradeId } from "@/data/mockCurriculum";
 import { useAuth } from "@/lib/auth";
@@ -146,7 +147,10 @@ export function Navbar({ grade }: { grade?: GradeId | undefined }) {
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-        <Logo />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <SidebarToggle />
+          <Logo />
+        </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden sm:block">
             <GradePreview active={grade} />
