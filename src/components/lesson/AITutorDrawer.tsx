@@ -9,12 +9,16 @@ import {
   type ControlMode,
   type TutorContext,
 } from "@/data/tutor";
+import { requestAiReply } from "@/lib/ai-tutor-client";
+import { useAuth } from "@/lib/auth";
 import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
 
 interface Message {
   id: number;
   role: "tutor" | "student";
   text: string;
+  /** Produced by the server-side AI (vs. the built-in local tutor). */
+  ai?: boolean;
 }
 
 const prompts: { intent: TutorIntent; label: L10n }[] = [
@@ -72,6 +76,8 @@ export function AITutorDrawer(props: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
   const timer = useRef<number | undefined>(undefined);
+  const runRef = useRef(0);
+  const { user, getAccessToken } = useAuth();
 
   // Latest scene state, read when the (delayed) reply is produced.
   const live = useRef<TutorContext>(null as unknown as TutorContext);
@@ -100,7 +106,13 @@ export function AITutorDrawer(props: Props) {
     setMessages((m) => (m.length === 0 ? [greeting] : [greeting, ...m.slice(1)]));
   }, [lang]);
 
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(timer.current);
+      runRef.current++; // drop any reply still in flight
+    },
+    [],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -110,13 +122,37 @@ export function AITutorDrawer(props: Props) {
     if (typing) return;
     setMessages((m) => [...m, { id: idRef.current++, role: "student", text }]);
     setTyping(true);
-    timer.current = window.setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        { id: idRef.current++, role: "tutor", text: buildTutorReply(sim, intent, live.current) },
-      ]);
-      setTyping(false);
-    }, 700);
+    const run = ++runRef.current;
+    const started = Date.now();
+
+    void (async () => {
+      // Server-side AI when the platform has it on; null means answer locally (never an error).
+      const accessToken = user ? await getAccessToken() : null;
+      const aiText = await requestAiReply({
+        sim,
+        ctx: live.current,
+        question: text,
+        intent,
+        accessToken,
+      });
+      if (run !== runRef.current) return;
+
+      const deliver = () => {
+        if (run !== runRef.current) return;
+        setMessages((m) => [
+          ...m,
+          {
+            id: idRef.current++,
+            role: "tutor",
+            text: aiText ?? buildTutorReply(sim, intent, live.current),
+            ai: aiText !== null,
+          },
+        ]);
+        setTyping(false);
+      };
+      const wait = aiText === null ? Math.max(0, 700 - (Date.now() - started)) : 0;
+      timer.current = window.setTimeout(deliver, wait);
+    })();
   };
 
   const submit = (e: FormEvent) => {
@@ -210,6 +246,12 @@ export function AITutorDrawer(props: Props) {
                 }
               >
                 {m.text}
+                {m.ai && (
+                  <span className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Sparkles className="size-3 text-subject" />
+                    {t("aiPowered")}
+                  </span>
+                )}
               </p>
             </div>
           ))}

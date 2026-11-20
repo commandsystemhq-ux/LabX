@@ -149,10 +149,23 @@ export const SHORT_CIRCUIT_R = 0.5;
 /** Extra series resistance of a loose / corroded connection. */
 export const LOOSE_CONTACT_R = 8;
 
-/** fault: 0 = none, 1 = short circuit (ammeter in parallel), 2 = loose connection. */
+/** Typical analogue/digital voltmeter input resistance (Ω) — it is meant to draw almost no current. */
+export const VOLTMETER_R = 10_000;
+
+/**
+ * fault: 0 = none, 1 = short circuit (ammeter in parallel), 2 = loose connection,
+ * 3 = voltmeter wired in series (its ~10 kΩ input resistance dominates the circuit).
+ */
 export function computeOhm(voltage: number, resistance: number, temperature: number, fault = 0) {
   const thermal = resistance * (1 + ALPHA * (temperature - 25));
-  const rEff = fault === 1 ? SHORT_CIRCUIT_R : fault === 2 ? thermal + LOOSE_CONTACT_R : thermal;
+  const rEff =
+    fault === 1
+      ? SHORT_CIRCUIT_R
+      : fault === 2
+        ? thermal + LOOSE_CONTACT_R
+        : fault === 3
+          ? thermal + VOLTMETER_R
+          : thermal;
   const current = rEff > 0 ? voltage / rEff : 0;
   const power = voltage * current;
   const contactPower = fault === 2 ? current * current * LOOSE_CONTACT_R : 0;
@@ -410,7 +423,13 @@ const ohm: SimulationDef = {
 /** All-at-once mixing multiplies the initial rate (no gradual addition). */
 export const BURST_FACTOR = 3;
 
-/** fault: 0 = none, 1 = all reagent mixed at once, 2 = sealed vessel (rate unchanged, pressure builds). */
+/** Heat (°C) an exothermic reaction adds to an uncooled vessel before the rate feeds back. */
+export const RUNAWAY_DELTA_C = 15;
+
+/**
+ * fault: 0 = none, 1 = all reagent mixed at once, 2 = sealed vessel (rate unchanged, pressure
+ * builds), 3 = exothermic reaction with no cooling (the vessel runs `RUNAWAY_DELTA_C` hotter).
+ */
 export function computeRate(
   temperature: number,
   concentration: number,
@@ -418,11 +437,12 @@ export function computeRate(
   fault = 0,
 ) {
   const burst = fault === 1 ? BURST_FACTOR : 1;
-  const rate = 5 * concentration * 2 ** ((temperature - 25) / 10) * (1 + 0.3 * catalyst) * burst;
+  const tEff = fault === 3 ? temperature + RUNAWAY_DELTA_C : temperature;
+  const rate = 5 * concentration * 2 ** ((tEff - 25) / 10) * (1 + 0.3 * catalyst) * burst;
   const k = concentration > 0 ? rate / concentration / 1000 : 0;
   const halfLife = k > 0 ? Math.LN2 / k : Infinity;
-  const collisions = concentration * Math.sqrt((temperature + 273) / 298) * 100;
-  return { rate, halfLife, collisions };
+  const collisions = concentration * Math.sqrt((tEff + 273) / 298) * 100;
+  return { rate, halfLife, collisions, tEff };
 }
 
 const rateVars: SimVariable[] = [
@@ -664,7 +684,13 @@ const reactionRate: SimulationDef = {
 /** Above this temperature (°C) membrane proteins denature and the membrane turns leaky. */
 export const DENATURE_C = 50;
 
-/** fault: 0 = none, 1 = damaged (leaky) membrane, 2 = hypertonic surroundings (+40% gradient). */
+/** Share of membrane channels still open when an inhibitor/toxin blocks the channel proteins. */
+export const BLOCKED_CHANNEL_FACTOR = 0.25;
+
+/**
+ * fault: 0 = none, 1 = damaged (leaky) membrane, 2 = hypertonic surroundings (+40% gradient),
+ * 3 = channel proteins blocked by an inhibitor (permeability × `BLOCKED_CHANNEL_FACTOR`).
+ */
 export function computeDiffusion(
   temperature: number,
   gradient: number,
@@ -673,12 +699,17 @@ export function computeDiffusion(
 ) {
   const denatured = temperature >= DENATURE_C;
   const leaky = fault === 1 || denatured;
-  const perm = leaky ? Math.min(100, permeability * 1.8 + 20) : permeability;
+  const blocked = fault === 3 && !leaky;
+  const perm = leaky
+    ? Math.min(100, permeability * 1.8 + 20)
+    : blocked
+      ? permeability * BLOCKED_CHANNEL_FACTOR
+      : permeability;
   const grad = fault === 2 ? Math.min(100, gradient + 40) : gradient;
   const rate = (grad / 100) * (perm / 100) * ((temperature + 273) / 310) * 100;
   const equilibrium = rate > 0.01 ? 60 / rate : Infinity;
   const crossing = rate * 0.6;
-  return { rate, equilibrium, crossing, leaky, denatured };
+  return { rate, equilibrium, crossing, leaky, denatured, blocked };
 }
 
 const diffVars: SimVariable[] = [

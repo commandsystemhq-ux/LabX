@@ -1,5 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, ChevronDown, GraduationCap, LogOut, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  GraduationCap,
+  LogOut,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { LangToggle } from "@/components/common/LangToggle";
@@ -69,6 +77,16 @@ function AccountActions() {
   if (user) {
     return (
       <>
+        {user.isAdmin && (
+          <Link
+            to="/admin"
+            aria-label={t("adminLink")}
+            title={t("adminLink")}
+            className="glass hidden size-9 items-center justify-center rounded-full transition-colors hover:bg-accent/60 md:flex"
+          >
+            <ShieldCheck className="size-4 text-phys" />
+          </Link>
+        )}
         <Link
           to="/auth"
           aria-label={t("account")}

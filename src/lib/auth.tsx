@@ -23,6 +23,8 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  /** UI hint only (app_metadata.role). The server re-checks the role on every admin call. */
+  isAdmin: boolean;
 }
 
 export type AuthResult = { ok: true; needsConfirmation: boolean } | { ok: false; error: UiKey };
@@ -37,6 +39,8 @@ interface AuthContextValue {
   signIn: (c: Credentials) => Promise<AuthResult>;
   signUp: (c: Credentials) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  /** A fresh access token for server functions, or null when signed out. */
+  getAccessToken: () => Promise<string | null>;
 }
 
 const unavailable: AuthResult = { ok: false, error: "authErrNotConfigured" };
@@ -50,6 +54,7 @@ const guestValue: AuthContextValue = {
   signIn: async () => unavailable,
   signUp: async () => unavailable,
   signOut: async () => {},
+  getAccessToken: async () => null,
 };
 
 const AuthContext = createContext<AuthContextValue>(guestValue);
@@ -57,7 +62,12 @@ const AuthContext = createContext<AuthContextValue>(guestValue);
 function toUser(session: Session | null): AuthUser | null {
   if (!session) return null;
   const { user } = session;
-  return { id: user.id, email: user.email ?? "", name: displayNameOf(user) };
+  return {
+    id: user.id,
+    email: user.email ?? "",
+    name: displayNameOf(user),
+    isAdmin: user.app_metadata?.["role"] === "admin",
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -172,6 +182,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await client.auth.signOut().catch(() => {});
   }, []);
 
+  const getAccessToken = useCallback(async () => {
+    const client = getSupabase();
+    if (!client) return null;
+    try {
+      const { data } = await client.auth.getSession();
+      return data.session?.access_token ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => {
     const user = toUser(session);
     return {
@@ -183,8 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      getAccessToken,
     };
-  }, [session, loading, sync, signIn, signUp, signOut]);
+  }, [session, loading, sync, signIn, signUp, signOut, getAccessToken]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

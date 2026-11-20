@@ -2,7 +2,7 @@ import { Minimize2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getNextLesson, type LessonLookup } from "@/data/mockCurriculum";
 import { buildComparison, demoValues } from "@/data/quizCompare";
-import { defaultLayers, extras } from "@/data/simExtras";
+import { extras, lessonLayers } from "@/data/simExtras";
 import {
   defaultsOf,
   lessonDefaults,
@@ -12,13 +12,14 @@ import {
   type SimValues,
   type ValueChange,
 } from "@/data/simulations";
-import type { ControlMode } from "@/data/tutor";
+import { buildIdleHint, type ControlMode } from "@/data/tutor";
 import { useLang } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
 import { useProgress } from "@/lib/use-progress";
 import { AITutorDrawer } from "./AITutorDrawer";
 import { ControlPanel } from "./ControlPanel";
 import { GuidedDiscovery } from "./GuidedDiscovery";
+import { IdleHintCard } from "./IdleHintCard";
 import { LessonHeader } from "./LessonHeader";
 import { QuizView } from "./QuizView";
 import type { StageView } from "./scenes";
@@ -26,10 +27,11 @@ import { SimulationStage, type DemoInfo } from "./SimulationStage";
 import type { StageLayers } from "./StageToolbar";
 import { StepGuide } from "./StepGuide";
 import { useGuided } from "./useGuided";
+import { useIdleHint } from "./useIdleHint";
 import { useQuiz } from "./useQuiz";
 
 export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
-  const { t, l } = useLang();
+  const { t, l, lang } = useLang();
   const sim = simulations[lookup.lesson.simulationId];
   const sx = extras[sim.id];
   const lessonId = lookup.lesson.id;
@@ -45,7 +47,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [view, setView] = useState<StageView>(preset?.view ?? "macro");
-  const [layers, setLayers] = useState<StageLayers>(() => defaultLayers(sim.id));
+  const [layers, setLayers] = useState<StageLayers>(() => lessonLayers(sim.id, preset));
   const [resetKey, setResetKey] = useState(0);
   const [demo, setDemo] = useState<DemoInfo | null>(null);
   const [tutorOpen, setTutorOpen] = useState(false);
@@ -58,6 +60,47 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const quiz = useQuiz();
   const guided = useGuided(sx.guided, values);
   const hazards = useMemo(() => sx.hazards(values), [sx, values]);
+
+  const tutorGuided = guided.current
+    ? { index: guided.index, total: guided.total, step: guided.current, done: guided.done }
+    : null;
+
+  // A fresh object whenever the student does something; the idle timer restarts on each one.
+  const quizState = quiz.state;
+  const { index: guidedIndex, done: guidedDone } = guided;
+  const idleActivity = useMemo(
+    () => ({
+      values,
+      step,
+      mode,
+      view,
+      layers,
+      errorMode,
+      demo,
+      quizState,
+      guidedIndex,
+      guidedDone,
+    }),
+    [values, step, mode, view, layers, errorMode, demo, quizState, guidedIndex, guidedDone],
+  );
+  const idle = useIdleHint({
+    // Never interrupts the free lab (step 3), an open tutor, board mode or a finished quiz.
+    enabled: step !== 3 && !board && !tutorOpen && !(step === 4 && quiz.state.done),
+    activity: idleActivity,
+  });
+  const idleText = idle.visible
+    ? buildIdleHint(sim, {
+        lang,
+        values,
+        change: lastChange,
+        step,
+        mode,
+        view,
+        hazards,
+        errorMode,
+        guided: tutorGuided,
+      })
+    : null;
 
   const dragStart = useRef<{ key: SimKey; from: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -296,16 +339,16 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
           view={view}
           hazards={hazards}
           errorMode={errorMode}
-          guided={
-            guided.current
-              ? {
-                  index: guided.index,
-                  total: guided.total,
-                  step: guided.current,
-                  done: guided.done,
-                }
-              : null
-          }
+          guided={tutorGuided}
+        />
+      )}
+
+      {!board && idleText && (
+        <IdleHintCard
+          text={idleText}
+          onAskTutor={() => setTutorOpen(true)}
+          onSnooze={idle.snooze}
+          onDismiss={idle.dismiss}
         />
       )}
     </div>

@@ -5,7 +5,7 @@
 ## 1. الهيكل الفعلي
 
 ```
-src/routes/            الصفحات (file-based) — index (/)، auth (تسجيل/حساب)، dashboard، lesson، __root (الـ shell + 404 + AuthProvider)
+src/routes/            الصفحات (file-based) — index (/)، auth (تسجيل/حساب)، admin (إدارة الـ AI، للأدمن فقط)، dashboard، lesson، __root (الـ shell + 404 + AuthProvider)
 src/components/
   landing/ layout/     الصفحة الرئيسية، Navbar، Footer
   dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
@@ -15,7 +15,7 @@ src/components/
 src/data/
   mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)
   simulations.ts       نماذج رياضية نقية (computeOhm/Rate/Diffusion)، المتغيرات، القصة، الشرح، الأسئلة
-  simExtras.ts         الأعطال (faults)، التحذيرات (hazards)، الخطوات الموجّهة، الحسابات، الطبقات
+  simExtras.ts         الأعطال (faults 1–3 لكل محاكاة)، التحذيرات (hazards)، الخطوات الموجّهة، الحسابات، الطبقات (field/microscope/equilibrium + fieldInfo/microscopeInfo/leChatelier/lessonLayers)
   tutor.ts             كشف النية + بناء ردود المعلم الذكي من سياق الشاشة
   quizCompare.ts       أرقام "قبل / اللي اخترته يعني / الفعلي" للإجابة الخاطئة
 src/lib/
@@ -25,7 +25,7 @@ src/lib/
   supabase.ts          عميل المتصفح من VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY فقط (يرفض مفاتيح service/secret)
   auth.tsx, auth-utils.ts   AuthProvider/useAuth (جلسة + مزامنة التقدم)، تحقق المدخلات، ترجمة أخطاء Supabase، safeRedirect
   use-progress.ts      hooks (useProgress/useMastery/useStudentStats) — use-is-client.ts للـ hydration
-supabase/schema.sql    جدول user_progress + سياسات RLS (يُشغَّل يدوياً في Supabase)
+  ai-config.ts         (مشترك) schemas zod + أنواع إعدادات الـ AI؛ لا أسرار ولا I/O\n  ai-tutor.functions.ts  server functions الوحيدة (askAiTutorFn/adminGet/adminSave) — تستورد ai/*.server.ts ديناميكياً داخل الـ handler\n  ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً\n  ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، providers (Bedrock/Azure)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)\nsupabase/schema.sql    جدول user_progress + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
 .env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
   error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
 src/server.ts, start.ts   مدخل السيرفر ووسيط الأخطاء/CSRF
@@ -37,24 +37,27 @@ vite.config.ts         plugins صريحة (tanstackStart, nitro للـ build ف�
 
 ## 2. خريطة التعديل السريعة
 
-| المهمة                                   | الملفات                                                                                                                                  |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| إضافة/تعديل درس أو وحدة                  | `data/mockCurriculum.ts` (+ اختبار السلامة في `test/simulations.test.ts`)                                                                |
-| محاكاة جديدة                             | `simulations.ts` (النموذج + المحتوى) + `simExtras.ts` + مشهدان في `scenes/` + `scenes/index.ts` + `SimulationId` في `mockCurriculum.ts`  |
-| تغيير معادلة/متغير/سؤال                  | `simulations.ts` فقط (+ `simExtras.ts` إن تأثرت التحذيرات)                                                                               |
-| عطل أو تحذير واقعي جديد                  | `simExtras.ts` (faults/hazards) + استخدام `fault` في الدالة الحسابية داخل `simulations.ts`                                               |
-| خطوة موجّهة / حسابات / طبقة               | `simExtras.ts` (guided/calc/layers) + رسم الطبقة في المشهد المعني                                                                        |
-| ردود المعلم أو تلميحاته                  | `data/tutor.ts`؛ الشرائح والسياق المعروض في `AITutorDrawer.tsx`                                                                          |
-| الاختبار والمقارنة البصرية               | `simulations.ts` (quiz/claims) + `quizCompare.ts` + `QuizView.tsx` + `useQuiz.ts`                                                        |
-| التقدم/XP/streak                         | `lib/progress.ts` (+ `use-progress.ts`)؛ العرض في `components/dashboard/*`                                                               |
-| تسجيل الدخول/الحساب/Supabase             | `routes/auth.tsx`, `lib/auth.tsx`, `lib/auth-utils.ts`, `lib/supabase.ts`, `lib/progress-remote.ts`, `supabase/schema.sql`, `Navbar.tsx` |
-| إعداد محاكاة خاص بدرس                    | `preset` في `mockCurriculum.ts` (`build`) + `lessonDefaults` في `simulations.ts` (يُطبَّق في `LessonWorkspace`)                             |
-| شكل المنصة (stage/toolbar/HUD)           | `SimulationStage.tsx`, `StageToolbar.tsx`, `StageInsets.tsx`, `HazardBanner.tsx`                                                         |
-| لوحة التحكم (sliders/حسابات/وضع الأخطاء) | `ControlPanel.tsx`, `ErrorModePanel.tsx`                                                                                                 |
-| نص واجهة أو ترجمة                        | `lib/i18n.tsx` (`ui`)؛ نصوص المحتوى تبقى في `data/*` بصيغة `{ar,en}`                                                                     |
-| ألوان/animations                         | `styles.css`                                                                                                                             |
-| صفحة جديدة                               | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                       |
-| Three.js                                 | الـ TODO في `SimulationStage.tsx`؛ استبدال `scenes/` بنفس الـ props (`SceneProps`)                                                       |
+| المهمة                                                                                                | الملفات                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| إضافة/تعديل درس أو وحدة                                                                               | `data/mockCurriculum.ts` (+ اختبار السلامة في `test/simulations.test.ts`)                                                                                        |
+| محاكاة جديدة                                                                                          | `simulations.ts` (النموذج + المحتوى) + `simExtras.ts` + مشهدان في `scenes/` + `scenes/index.ts` + `SimulationId` في `mockCurriculum.ts`                          |
+| تغيير معادلة/متغير/سؤال                                                                               | `simulations.ts` فقط (+ `simExtras.ts` إن تأثرت التحذيرات)                                                                                                       |
+| عطل أو تحذير واقعي جديد                                                                               | `simExtras.ts` (faults/hazards) + استخدام `fault` في الدالة الحسابية داخل `simulations.ts`                                                                       |
+| خطوة موجّهة / حسابات / طبقة                                                                            | `simExtras.ts` (guided/calc/layers) + رسم الطبقة في المشهد المعني                                                                                                |
+| ردود المعلم أو تلميحاته                                                                               | `data/tutor.ts`؛ الشرائح والسياق المعروض في `AITutorDrawer.tsx`                                                                                                  |
+| الاختبار والمقارنة البصرية                                                                            | `simulations.ts` (quiz/claims) + `quizCompare.ts` + `QuizView.tsx` + `useQuiz.ts`                                                                                |
+| التقدم/XP/streak                                                                                      | `lib/progress.ts` (+ `use-progress.ts`)؛ العرض في `components/dashboard/*`                                                                                       |
+| تسجيل الدخول/الحساب/Supabase                                                                          | `routes/auth.tsx`, `lib/auth.tsx`, `lib/auth-utils.ts`, `lib/supabase.ts`, `lib/progress-remote.ts`, `supabase/schema.sql`, `Navbar.tsx`                         |
+| مزوّد الـ AI / لوحة الإدارة / مؤقت الخمول                                                              | lib/ai-config.ts, lib/ai/*.server.ts, lib/ai-tutor.functions.ts,                                                                                                 |
+| outes/admin.tsx, AITutorDrawer.tsx؛ الخمول: useIdleHint.ts, IdleHintCard.tsx, uildIdleHint في utor.ts |
+| إعداد محاكاة خاص بدرس                                                                                 | `preset` (`values`/`view`/`layers`) في `mockCurriculum.ts` + `lessonDefaults` في `simulations.ts` + `lessonLayers` في `simExtras.ts` (يُطبَّق في `LessonWorkspace`) |
+| لوحة إثراء جديدة على المسرح                                                                           | دالة نقية + `LayerDef` في `simExtras.ts`، ومكوّن في `StageInsets.tsx`، وعرضه في `SimulationStage.tsx`                                                             |
+| شكل المنصة (stage/toolbar/HUD)                                                                        | `SimulationStage.tsx`, `StageToolbar.tsx`, `StageInsets.tsx`, `HazardBanner.tsx`                                                                                 |
+| لوحة التحكم (sliders/حسابات/وضع الأخطاء)                                                              | `ControlPanel.tsx`, `ErrorModePanel.tsx`                                                                                                                         |
+| نص واجهة أو ترجمة                                                                                     | `lib/i18n.tsx` (`ui`)؛ نصوص المحتوى تبقى في `data/*` بصيغة `{ar,en}`                                                                                             |
+| ألوان/animations                                                                                      | `styles.css`                                                                                                                                                     |
+| صفحة جديدة                                                                                            | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                                               |
+| Three.js                                                                                              | الـ TODO في `SimulationStage.tsx`؛ استبدال `scenes/` بنفس الـ props (`SceneProps`)                                                                               |
 
 ## 3. ملفات حساسة
 
@@ -81,7 +84,9 @@ routes/lesson.tsx ──(id)──▶ findLesson ──▶ LessonWorkspace (حا
 step (1 قصة → 2 شرح موجّه → 3 تجربة حرة → 4 اختبار)
    2 + mode=guided ─▶ useGuided (يتحقق من done(values) ويُثبّته)
    4 ─▶ useQuiz (الحالة في الـ workspace) ─▶ خطأ ─▶ buildComparison + seeMistake ─▶ stage demo ─▶ ارجع للاختبار
-AITutorDrawer ◀─ values, lastChange, step, mode, view, hazards, guided ─▶ tutor.buildTutorReply(sim.tutor + سياق)
+AITutorDrawer ◀─ values, lastChange, step, mode, view, hazards, guided ─▶ مسجَّل؟ requestAiReply ─▶ askAiTutorFn ─▶ service.ask ─▶ ai_settings (مفكوكة التشفير) ─▶ Bedrock|Azure
+                  أي فشل/تعطيل/ضيف ─▶ tutor.buildTutorReply(sim.tutor + سياق) بدون رسالة خطأ
+idle: useIdleHint(activity) ─▶ بعد 60ث بلا تفاعل (ليس step 3) ─▶ IdleHintCard ◀─ tutor.buildIdleHint (محلي، بدون تكلفة AI)
 progress: goStep ─▶ progressStore.recordStep ; اكتمال الاختبار ─▶ recordQuiz ─▶ repository الحالي
           (مسجَّل: Supabase بعد hydrate ودمج عمل الضيف؛ ضيف: ذاكرة فقط؛ بدون Supabase: localStorage احتياطي)
           dashboard/UnitCard/TopBar ◀─ useMastery/useStudentStats (الإتقان = المحفوظ فقط، بدون قيم mock)
@@ -104,4 +109,4 @@ auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSu
 - XP/streak يحسبهما العميل ويخزّنهما في صف المستخدم (RLS يمنع الوصول لغيره لكن لا يمنع المستخدم من تعديل صفه)؛ لا تستخدمهما لأي مكافأة ذات قيمة مالية بدون تحقق من السيرفر.
 - الحفظ last-write-wins بين الأجهزة (الدمج يحدث عند تسجيل الدخول فقط).
 - نشاط الأسبوع تقدير من وقت آخر تحديث لكل درس (لا يوجد تتبع زمن فعلي).
-- المعلم الذكي محلي (قواعد)؛ أي LLM حقيقي يُستدعى من السيرفر فقط بنفس `TutorContext`.
+- الـ LLM يُستدعى من السيرفر فقط ولمستخدم مسجَّل فقط (الضيف يأخذ الردود المحلية)؛ Bedrock عبر Bedrock API key (Bearer) لا SigV4؛ الـ rate limit في ذاكرة السيرفر (best-effort عند تعدد النسخ)؛ كل سؤال مستقل (بدون سجل محادثة).

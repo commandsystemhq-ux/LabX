@@ -126,6 +126,44 @@ function hintReply(ctx: TutorContext) {
     : "Think about the relationships you tested. If you miss, press “See the mistake live” to find out why in the simulation.";
 }
 
+/**
+ * Short nudge shown after a minute of inactivity: the scene as it is right now plus one concrete
+ * next move for the open step. Null in the free lab (step 3), where nobody should be interrupted.
+ */
+export function buildIdleHint(sim: SimulationDef, ctx: TutorContext): string | null {
+  if (ctx.step === 3) return null;
+  const ar = ctx.lang === "ar";
+  const scene = sim.context(ctx.values, ctx.lang).slice(0, 160);
+  const top = ctx.hazards[0];
+
+  let tip: string;
+  if (top) {
+    tip = ar ? `⚠️ ${top.title.ar}. الحل: ${top.fix.ar}` : `⚠️ ${top.title.en}. Fix: ${top.fix.en}`;
+  } else if (ctx.step === 1) {
+    tip = ar
+      ? "فكّر في إجابة سؤال القصة، وبعدين اضغط «يلا نفهم اللي بيحصل»."
+      : "Think about the story's question, then press “Let's see what's happening”.";
+  } else if (ctx.step === 2 && ctx.guided) {
+    const { step, index, total, done } = ctx.guided;
+    tip = done
+      ? ar
+        ? `خلصت الخطوة ${index + 1} من ${total}. اضغط «الخطوة التالية».`
+        : `Step ${index + 1} of ${total} is done. Press “Next step”.`
+      : ar
+        ? `${step.task.ar} 💡 ${step.hint.ar}`
+        : `${step.task.en} 💡 ${step.hint.en}`;
+  } else if (ctx.step === 2) {
+    tip = ar
+      ? "غيّر متغيراً واحداً وراقب القراءات والرسم البياني."
+      : "Change one variable and watch the readouts and the graph.";
+  } else {
+    tip = ar
+      ? "فكّر في العلاقة بين المتغيرات اللي جرّبتها. لو غلطت، «شاهد الخطأ عملياً» بيوضح السبب."
+      : "Think about how the variables you tried relate. If you miss, “See the mistake live” shows why.";
+  }
+  return top ? `${scene}\n${tip}` : `${scene}\n💡 ${tip}`;
+}
+
 export function buildTutorReply(sim: SimulationDef, intent: TutorIntent, ctx: TutorContext) {
   if (intent === "hint") return hintReply(ctx);
   if (intent === "hazard") return hazardReply(sim, ctx);

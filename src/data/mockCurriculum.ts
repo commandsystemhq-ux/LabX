@@ -31,6 +31,8 @@ export interface SimPreset {
   values?: Partial<Record<SimKey, number>>;
   /** Stage perspective the lesson opens with. */
   view?: "macro" | "molecular";
+  /** Extra stage layers switched on when the lesson opens (unknown ids are ignored). */
+  layers?: string[];
 }
 
 export interface Lesson {
@@ -148,6 +150,23 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ["الانتشار والأسموزية", "Diffusion and osmosis", 20],
         ],
       },
+      {
+        title: { ar: "المجهر وبنية الغشاء", en: "Microscopy & Membrane Structure" },
+        lessons: [
+          [
+            "المجهر الضوئي وتكبير الخلية",
+            "Light microscope and cell magnification",
+            18,
+            { values: { gradient: 40 }, layers: ["microscope"] },
+          ],
+          [
+            "طبقات الغشاء البلازمي (النموذج الفسيفسائي)",
+            "Plasma membrane layers (fluid mosaic model)",
+            22,
+            { values: { permeability: 50 }, view: "molecular", layers: ["anatomy", "microscope"] },
+          ],
+        ],
+      },
     ]),
     physics: build("g10", "physics", [
       {
@@ -164,6 +183,23 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ["شدة التيار وفرق الجهد", "Current and potential difference", 24],
         ],
       },
+      {
+        title: { ar: "القدرة والطاقة الكهربية", en: "Electric Power & Energy" },
+        lessons: [
+          [
+            "القدرة الكهربية P = V × I",
+            "Electric power P = V × I",
+            20,
+            { values: { voltage: 12, resistance: 12 } },
+          ],
+          [
+            "الطاقة الكهربية وفاتورة الكهرباء",
+            "Electrical energy and your bill",
+            18,
+            { values: { voltage: 18, resistance: 20 } },
+          ],
+        ],
+      },
     ]),
     chemistry: build("g10", "chemistry", [
       {
@@ -178,6 +214,23 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
         lessons: [
           ["أنواع التفاعلات", "Types of reactions", 18],
           ["العوامل المؤثرة على سرعة التفاعل", "Factors affecting reaction rate", 24],
+        ],
+      },
+      {
+        title: { ar: "الطاقة والتصادم", en: "Energy & Collisions" },
+        lessons: [
+          [
+            "التفاعلات الطاردة والماصة للحرارة",
+            "Exothermic and endothermic reactions",
+            20,
+            { values: { temperature: 35 }, layers: ["energy"] },
+          ],
+          [
+            "نظرية التصادم",
+            "Collision theory",
+            22,
+            { values: { concentration: 1.4 }, view: "molecular" },
+          ],
         ],
       },
     ]),
@@ -203,6 +256,27 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ],
         ],
       },
+      {
+        title: { ar: "التبادل عبر الأسطح", en: "Exchange Across Surfaces" },
+        lessons: [
+          [
+            "التبادل الغازي في الحويصلات الهوائية",
+            "Gas exchange in the alveoli",
+            24,
+            {
+              values: { gradient: 70, permeability: 85 },
+              view: "molecular",
+              layers: ["anatomy", "timeline"],
+            },
+          ],
+          [
+            "الأسموزية في خلايا النبات",
+            "Osmosis in plant cells",
+            20,
+            { values: { gradient: 60, permeability: 40 }, layers: ["timeline"] },
+          ],
+        ],
+      },
     ]),
     physics: build("g11", "physics", [
       {
@@ -224,6 +298,23 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ],
         ],
       },
+      {
+        title: { ar: "الكهربية والأمان", en: "Electricity & Safety" },
+        lessons: [
+          [
+            "الفيوز والحماية من القصر",
+            "Fuses and short-circuit protection",
+            22,
+            { values: { voltage: 20, resistance: 8 }, layers: ["hidden"] },
+          ],
+          [
+            "سخونة الأسلاك والفقد في الطاقة",
+            "Wire heating and energy loss",
+            20,
+            { values: { temperature: 80, resistance: 15 }, view: "molecular" },
+          ],
+        ],
+      },
     ]),
     chemistry: build("g11", "chemistry", [
       {
@@ -238,6 +329,23 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
         lessons: [
           ["المحتوى الحراري", "Enthalpy", 20],
           ["طاقة التنشيط والعوامل الحفازة", "Activation energy and catalysts", 24],
+        ],
+      },
+      {
+        title: { ar: "العوامل الحفازة في الصناعة والحياة", en: "Catalysts in Industry & Life" },
+        lessons: [
+          [
+            "الحفاز في الصناعة (عملية هابر)",
+            "Industrial catalysts (Haber process)",
+            24,
+            { values: { temperature: 45, catalyst: 4 }, layers: ["energy"] },
+          ],
+          [
+            "الإنزيمات كعوامل حفازة حيوية",
+            "Enzymes as biological catalysts",
+            20,
+            { values: { temperature: 37, catalyst: 6 }, view: "molecular" },
+          ],
         ],
       },
     ]),
@@ -256,6 +364,27 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
         lessons: [
           ["الغدد الصماء", "Endocrine glands", 22],
           ["النقل الخلوي والانتشار", "Cellular transport and diffusion", 20],
+        ],
+      },
+      {
+        title: { ar: "الخلية تحت الضغط", en: "Cells Under Stress" },
+        lessons: [
+          [
+            "الانتشار المُيسَّر وقنوات الأغشية",
+            "Facilitated diffusion and channel proteins",
+            22,
+            {
+              values: { permeability: 35, gradient: 70 },
+              view: "molecular",
+              layers: ["anatomy", "microscope"],
+            },
+          ],
+          [
+            "تأثير الحرارة على الغشاء الخلوي",
+            "Heat effects on the cell membrane",
+            20,
+            { values: { temperature: 40 }, layers: ["timeline", "microscope"] },
+          ],
         ],
       },
     ]),
@@ -280,6 +409,27 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ["المحرك الكهربي", "The electric motor", 26],
         ],
       },
+      {
+        title: { ar: "المجال الكهربي وحركة الإلكترونات", en: "Electric Field & Electron Motion" },
+        lessons: [
+          [
+            "المجال الكهربي داخل الموصل",
+            "The electric field inside a conductor",
+            24,
+            {
+              values: { voltage: 16, resistance: 20 },
+              view: "molecular",
+              layers: ["field", "hidden"],
+            },
+          ],
+          [
+            "سرعة الانجراف والقوة على الإلكترون",
+            "Drift velocity and the force on an electron",
+            26,
+            { values: { voltage: 20, resistance: 25 }, view: "molecular", layers: ["field"] },
+          ],
+        ],
+      },
     ]),
     chemistry: build("g12", "chemistry", [
       {
@@ -299,6 +449,27 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
         lessons: [
           ["الخلايا الجلفانية", "Galvanic cells", 25],
           ["التحليل الكهربي", "Electrolysis", 24],
+        ],
+      },
+      {
+        title: { ar: "قاعدة لوشاتيليه", en: "Le Chatelier's Principle" },
+        lessons: [
+          [
+            "لوشاتيليه: أثر التركيز",
+            "Le Chatelier: effect of concentration",
+            24,
+            { values: { concentration: 1.6 }, layers: ["equilibrium"] },
+          ],
+          [
+            "لوشاتيليه: أثر الحرارة والحفاز",
+            "Le Chatelier: effect of temperature and catalyst",
+            26,
+            {
+              values: { temperature: 45, catalyst: 3 },
+              view: "molecular",
+              layers: ["equilibrium", "energy"],
+            },
+          ],
         ],
       },
     ]),

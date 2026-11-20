@@ -17,7 +17,13 @@ import { ComparisonBars } from "./ComparisonBars";
 import { HazardBanner } from "./HazardBanner";
 import { scenes, type StageView } from "./scenes";
 import { useSimClock } from "./scenes/sceneUtils";
-import { EnergyDiagram, EquilibriumTimeline } from "./StageInsets";
+import {
+  EnergyDiagram,
+  EquilibriumShiftPanel,
+  EquilibriumTimeline,
+  FieldPanel,
+  MicroscopeView,
+} from "./StageInsets";
 import { StageToolbar, type StageLayers } from "./StageToolbar";
 
 /** Shown after a wrong quiz answer: what to look at in the simulation and the numbers behind it. */
@@ -68,6 +74,9 @@ export function SimulationStage(props: Props) {
   const showFormula = step === 2;
   const showTimeline = sim.id === "diffusion" && layers["timeline"];
   const showEnergy = sim.id === "reaction-rate" && layers["energy"];
+  const showEquilibrium = sim.id === "reaction-rate" && layers["equilibrium"];
+  const showField = sim.id === "ohm" && layers["field"];
+  const showScope = sim.id === "diffusion" && layers["microscope"];
 
   return (
     <div
@@ -249,24 +258,33 @@ export function SimulationStage(props: Props) {
                 <HazardBanner hazards={hazards} />
               </div>
             )}
-            {step !== 1 && (showFormula || showTimeline || showEnergy) && (
-              <div
-                className={
-                  "flex w-56 max-w-[60%] flex-col gap-2 " + (level > 0 ? "max-sm:hidden" : "")
-                }
-              >
-                {showFormula && (
-                  <div className="glass-strong animate-fade-up rounded-2xl px-4 py-3" dir="ltr">
-                    <p className="font-display text-2xl font-bold text-subject">{sim.formula}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {sim.formulaLive(values)}
-                    </p>
-                  </div>
-                )}
-                {showTimeline && <EquilibriumTimeline values={values} time={time} />}
-                {showEnergy && <EnergyDiagram catalyst={values.catalyst} />}
-              </div>
-            )}
+            {step !== 1 &&
+              (showFormula ||
+                showTimeline ||
+                showEnergy ||
+                showEquilibrium ||
+                showField ||
+                showScope) && (
+                <div
+                  className={
+                    "flex w-56 max-w-[60%] flex-col gap-2 " + (level > 0 ? "max-sm:hidden" : "")
+                  }
+                >
+                  {showFormula && (
+                    <div className="glass-strong animate-fade-up rounded-2xl px-4 py-3" dir="ltr">
+                      <p className="font-display text-2xl font-bold text-subject">{sim.formula}</p>
+                      <p className="mt-1 font-mono text-xs text-muted-foreground">
+                        {sim.formulaLive(values)}
+                      </p>
+                    </div>
+                  )}
+                  {showTimeline && <EquilibriumTimeline values={values} time={time} />}
+                  {showEnergy && <EnergyDiagram catalyst={values.catalyst} />}
+                  {showEquilibrium && <EquilibriumShiftPanel values={values} />}
+                  {showField && <FieldPanel values={values} />}
+                  {showScope && <MicroscopeView values={values} view={view} />}
+                </div>
+              )}
           </>
         )}
       </div>

@@ -140,14 +140,20 @@ describe("Guided discovery", () => {
 });
 describe("Layers and subject extras", () => {
   it("each subject has its own layers on top of labels and flow", () => {
-    expect(Object.keys(defaultLayers("ohm"))).toEqual(["labels", "flow", "hidden"]);
+    expect(Object.keys(defaultLayers("ohm"))).toEqual(["labels", "flow", "hidden", "field"]);
     expect(Object.keys(defaultLayers("diffusion"))).toEqual([
       "labels",
       "flow",
       "anatomy",
       "timeline",
+      "microscope",
     ]);
-    expect(Object.keys(defaultLayers("reaction-rate"))).toEqual(["labels", "flow", "energy"]);
+    expect(Object.keys(defaultLayers("reaction-rate"))).toEqual([
+      "labels",
+      "flow",
+      "energy",
+      "equilibrium",
+    ]);
   });
 
   it("equilibrium progress grows with time and is complete without a gradient", () => {
