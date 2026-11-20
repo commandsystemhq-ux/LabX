@@ -87,7 +87,7 @@ routes/lesson.tsx ──(id)──▶ findLesson ──▶ LessonWorkspace (حا
         ├─▶ sim.readouts/graph/activity ─▶ ControlPanel (قراءات، رسم، حسابات)
         ├─▶ extras.hazards(values) ─▶ SimulationStage (HazardBanner + اهتزاز/تنبيه) + ErrorModePanel + المعلم
         └─▶ Scene (macro|molecular) ◀─ useSimClock(t) + layers + hazard
-step (1 قصة → 2 شرح موجّه → 3 تجربة حرة → 4 اختبار)
+step (1 قصة + «ليه مهم» + توقّع مكتوب [prediction: يُحفظ عند blur/مغادرة الخطوة ويظهر في 2/3 ويصل لنور] → 2 شرح موجّه → 3 تجربة حرة → 4 اختبار [quizMistake: السؤال/اختيار الطالب/الصح يصل لنور ويبقى أثناء عرض الخطأ عملياً])
    2 + mode=guided ─▶ useGuided (يتحقق من done(values) ويُثبّته)
    4 ─▶ useQuiz (الحالة في الـ workspace) ─▶ خطأ ─▶ buildComparison + seeMistake ─▶ stage demo ─▶ ارجع للاختبار
 Noor (NoorAssistant، في الـ root) ◀─ NoorProvider.lesson (يسجّلها LessonWorkspace) أو سياق الصفحة؛ values, lastChange, step, mode, view, hazards, guided ─▶ مسجَّل؟ requestAiReply ─▶ askAiTutorFn ─▶ service.ask ─▶ ai_settings (مفكوكة التشفير) ─▶ Bedrock|Azure

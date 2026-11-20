@@ -12,7 +12,13 @@ import {
   type SimValues,
   type ValueChange,
 } from "@/data/simulations";
-import { buildIdleHint, type ControlMode, type TutorContext } from "@/data/tutor";
+import {
+  buildIdleHint,
+  MAX_PREDICTION_LENGTH,
+  type ControlMode,
+  type QuizMistake,
+  type TutorContext,
+} from "@/data/tutor";
 import { useNoorControl, useNoorOpen } from "@/components/noor/NoorProvider";
 import { useLang } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
@@ -58,6 +64,10 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
   const [mode, setMode] = useState<ControlMode>("guided");
   const [errorMode, setErrorMode] = useState(false);
   const [xpGained, setXpGained] = useState(0);
+  // Step 1 "predict and write": the draft follows the typing; the saved prediction (what Noor and
+  // the later steps see) only updates on blur / when leaving the step, so typing never re-renders Noor.
+  const [predictionDraft, setPredictionDraft] = useState("");
+  const [prediction, setPrediction] = useState("");
 
   const quiz = useQuiz();
   const guided = useGuided(sx.guided, values);
@@ -76,6 +86,30 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
         : null,
     [guidedCurrent, guidedIndex, guidedTotal, guidedDone],
   );
+  // The quiz answer the student just got wrong. Opening its live demo clears the quiz selection,
+  // so the question + pick are remembered separately for as long as the demo is on screen.
+  const [demoMistake, setDemoMistake] = useState<{ q: QuizQuestion; chosen: number } | null>(null);
+  const quizQuestion = sim.quiz[quiz.state.index];
+  const picked = quiz.state.selected;
+  const mistakeFocus =
+    quizQuestion && picked !== null && picked !== quizQuestion.correct
+      ? { q: quizQuestion, chosen: picked }
+      : demo
+        ? demoMistake
+        : null;
+  const quizMistake = useMemo<QuizMistake | null>(() => {
+    if (!mistakeFocus) return null;
+    const chosen = mistakeFocus.q.options[mistakeFocus.chosen];
+    const correct = mistakeFocus.q.options[mistakeFocus.q.correct];
+    if (!chosen || !correct) return null;
+    return {
+      question: mistakeFocus.q.prompt[lang],
+      chosen: chosen[lang],
+      correct: correct[lang],
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the question / pick, not the wrapper object
+  }, [mistakeFocus?.q, mistakeFocus?.chosen, lang]);
+
   const tutorCtx = useMemo<TutorContext>(
     () => ({
       lang,
@@ -87,8 +121,22 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
       hazards,
       errorMode,
       guided: tutorGuided,
+      prediction: prediction || null,
+      quizMistake,
     }),
-    [lang, values, lastChange, step, mode, view, hazards, errorMode, tutorGuided],
+    [
+      lang,
+      values,
+      lastChange,
+      step,
+      mode,
+      view,
+      hazards,
+      errorMode,
+      tutorGuided,
+      prediction,
+      quizMistake,
+    ],
   );
 
   useEffect(() => {
@@ -110,8 +158,21 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
       quizState,
       guidedIndex,
       guidedDone,
+      predictionDraft,
     }),
-    [values, step, mode, view, layers, errorMode, demo, quizState, guidedIndex, guidedDone],
+    [
+      values,
+      step,
+      mode,
+      view,
+      layers,
+      errorMode,
+      demo,
+      quizState,
+      guidedIndex,
+      guidedDone,
+      predictionDraft,
+    ],
   );
   const idle = useIdleHint({
     // Never interrupts the free lab (step 3), an open tutor, board mode or a finished quiz.
@@ -132,7 +193,11 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
     dragStart.current = null;
   };
 
+  const commitPrediction = () =>
+    setPrediction(predictionDraft.trim().slice(0, MAX_PREDICTION_LENGTH));
+
   const goStep = (s: number) => {
+    commitPrediction();
     if (s === 2 && step !== 2 && mode === "guided" && !guided.finished) {
       applyGuidedStart(guided.index);
     }
@@ -196,6 +261,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
     if (q.demoView) setView(q.demoView);
     setPlaying(true);
     goStep(3);
+    setDemoMistake({ q, chosen });
     setDemo({ note: l(q.demoNote), comparison: buildComparison(sim, q, chosen) });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -260,6 +326,9 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
       onBackToQuiz={() => goStep(4)}
       board={board}
       onStartExplain={() => goStep(2)}
+      prediction={predictionDraft}
+      onPrediction={setPredictionDraft}
+      onPredictionCommit={commitPrediction}
     />
   );
 
@@ -323,7 +392,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
                   onGoLab={() => goStep(3)}
                 />
               ) : (
-                <StepGuide sim={sim} step={step} onStep={goStep} />
+                <StepGuide sim={sim} step={step} onStep={goStep} prediction={prediction} />
               )}
             </div>
             {/* Control & live graph panel (35%) — on the right in Arabic */}

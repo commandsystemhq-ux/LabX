@@ -87,3 +87,32 @@ describe("buildTutorReply is aware of the scene", () => {
     expect(reply).not.toContain("<img");
   });
 });
+
+describe("local replies use the student's prediction and quiz mistake", () => {
+  it("ties a 'why' answer to the prediction once the student is past step 1", () => {
+    const withPrediction = buildTutorReply(ohm, "why", ctx({ prediction: "current falls" }));
+    expect(withPrediction).toContain("Your prediction was: “current falls”");
+    expect(buildTutorReply(ohm, "why", ctx({ prediction: "x", step: 1 }))).not.toContain(
+      "Your prediction",
+    );
+    expect(buildTutorReply(ohm, "why", ctx())).not.toContain("Your prediction");
+    expect(buildTutorReply(ohm, "hint", ctx({ prediction: "x" }))).not.toContain("prediction was");
+  });
+
+  it("mentions the wrong pick and the right answer for 'mistake'", () => {
+    const reply = buildTutorReply(
+      ohm,
+      "mistake",
+      ctx({ quizMistake: { question: "Q1", chosen: "doubles", correct: "halves" } }),
+    );
+    expect(reply).toContain("“Q1” you picked “doubles”");
+    expect(reply).toContain("“halves”");
+    expect(
+      buildTutorReply(
+        ohm,
+        "mistake",
+        ctx({ lang: "ar", quizMistake: { question: "س", chosen: "أ", correct: "ب" } }),
+      ),
+    ).toContain("اخترت «أ» والإجابة الصح «ب»");
+  });
+});

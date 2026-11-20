@@ -259,6 +259,10 @@ export const askTutorInput = z.object({
   hazards: z.array(z.string().max(240)).max(3),
   errorMode: z.boolean(),
   task: z.string().max(300).optional(),
+  /** The student's own step-1 guess (free text typed by the student). */
+  prediction: z.string().max(200).optional(),
+  /** "question | picked | correct" for a quiz answer the student just got wrong. */
+  quizMistake: z.string().max(500).optional(),
 });
 export type AskTutorInput = z.infer<typeof askTutorInput>;
 export type AskTutorResult =

@@ -11,6 +11,7 @@ import {
 import { extras, hazardLevel, type Hazard } from "@/data/simExtras";
 import type { Comparison } from "@/data/quizCompare";
 import type { SimValues, SimulationDef } from "@/data/simulations";
+import { MAX_PREDICTION_LENGTH } from "@/data/tutor";
 import { useLang } from "@/lib/i18n";
 import { useIsClient } from "@/lib/use-is-client";
 import { ComparisonBars } from "./ComparisonBars";
@@ -52,6 +53,10 @@ interface Props {
   onBackToQuiz: () => void;
   board: boolean;
   onStartExplain: () => void;
+  /** Step 1: the student's written guess (draft), saved into the lesson state on blur / when leaving. */
+  prediction: string;
+  onPrediction: (value: string) => void;
+  onPredictionCommit: () => void;
 }
 
 /**
@@ -205,9 +210,30 @@ export function SimulationStage(props: Props) {
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
               {l(sim.story.body)}
             </p>
+            <p className="mt-3 rounded-2xl border border-border bg-background/40 p-3 text-sm leading-relaxed">
+              <span className="font-bold text-subject">{t("whyMatters")} </span>
+              {l(sim.story.why)}
+            </p>
             <p className="mt-4 rounded-2xl border border-subject/30 bg-subject/10 p-3 text-sm font-semibold">
               🤔 {l(sim.story.question)}
             </p>
+            <label
+              htmlFor="story-prediction"
+              className="mt-3 block text-xs font-bold text-muted-foreground"
+            >
+              {t("predictLabel")}
+            </label>
+            <textarea
+              id="story-prediction"
+              rows={2}
+              maxLength={MAX_PREDICTION_LENGTH}
+              dir="auto"
+              value={props.prediction}
+              placeholder={t("predictPlaceholder")}
+              onChange={(e) => props.onPrediction(e.target.value)}
+              onBlur={props.onPredictionCommit}
+              className="mt-1.5 w-full resize-none rounded-2xl border border-input bg-background/60 p-3 text-sm outline-none placeholder:text-muted-foreground focus:border-subject"
+            />
             <button
               type="button"
               onClick={props.onStartExplain}

@@ -10,6 +10,13 @@ import type { SimValues, SimulationDef, TutorIntent, ValueChange } from "./simul
 
 export type ControlMode = "guided" | "free";
 
+/** The quiz question the student just got wrong (texts already in the UI language). */
+export interface QuizMistake {
+  question: string;
+  chosen: string;
+  correct: string;
+}
+
 export interface TutorContext {
   lang: Lang;
   values: SimValues;
@@ -20,9 +27,14 @@ export interface TutorContext {
   hazards: Hazard[];
   errorMode: boolean;
   guided: { index: number; total: number; step: GuidedStep; done: boolean } | null;
+  /** What the student wrote in step 1 ("predict and write"), if anything. */
+  prediction?: string | null | undefined;
+  /** Set while the student is looking at a wrong quiz answer (or its live demo). */
+  quizMistake?: QuizMistake | null | undefined;
 }
 
 export const MAX_QUESTION_LENGTH = 300;
+export const MAX_PREDICTION_LENGTH = 200;
 
 /** Light Arabic normalisation so keyword matching survives hamza / ya / ta-marbuta variants. */
 export function normalise(text: string) {
@@ -164,14 +176,37 @@ export function buildIdleHint(sim: SimulationDef, ctx: TutorContext): string | n
   return top ? `${scene}\n${tip}` : `${scene}\n💡 ${tip}`;
 }
 
+/** Short notes that tie a local reply to what the student wrote / got wrong. */
+function studentNotes(intent: TutorIntent, ctx: TutorContext) {
+  const ar = ctx.lang === "ar";
+  const notes: string[] = [];
+  const m = ctx.quizMistake;
+  if (m && (intent === "mistake" || intent === "why" || intent === "example")) {
+    notes.push(
+      ar
+        ? `📝 في سؤال «${m.question}» اخترت «${m.chosen}» والإجابة الصح «${m.correct}». شوف المقارنة والعرض العملي.`
+        : `📝 On “${m.question}” you picked “${m.chosen}”; the right answer is “${m.correct}”. Check the comparison and the live demo.`,
+    );
+  }
+  if (ctx.prediction && ctx.step >= 2 && ["why", "colloquial", "free"].includes(intent)) {
+    notes.push(
+      ar
+        ? `🤔 توقعك كان: «${ctx.prediction}» — قارنه بالقراءات اللي قدامك دلوقتي.`
+        : `🤔 Your prediction was: “${ctx.prediction}” — compare it with the readings in front of you now.`,
+    );
+  }
+  return notes.length ? `\n\n${notes.join("\n")}` : "";
+}
+
 export function buildTutorReply(sim: SimulationDef, intent: TutorIntent, ctx: TutorContext) {
   if (intent === "hint") return hintReply(ctx);
   if (intent === "hazard") return hazardReply(sim, ctx);
 
   const base = sim.tutor(intent, ctx.values, ctx.lang, ctx.change);
   const top = ctx.hazards[0];
-  if (top && (intent === "why" || intent === "free" || intent === "colloquial")) {
-    return `${base}\n\n${hazardLine(top, ctx.lang)}`;
-  }
-  return base;
+  const reply =
+    top && (intent === "why" || intent === "free" || intent === "colloquial")
+      ? `${base}\n\n${hazardLine(top, ctx.lang)}`
+      : base;
+  return reply + studentNotes(intent, ctx);
 }

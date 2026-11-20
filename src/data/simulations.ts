@@ -85,7 +85,8 @@ export interface SimulationDef {
   activity: (v: SimValues) => number;
   formula: string;
   formulaLive: (v: SimValues) => string;
-  story: { title: L10n; body: L10n; question: L10n };
+  /** `why` = the two-line "why this matters"; `question` = the guess the student writes down. */
+  story: { title: L10n; body: L10n; why: L10n; question: L10n };
   explain: L10n[];
   quiz: QuizQuestion[];
   context: (v: SimValues, lang: Lang) => string;
@@ -264,6 +265,10 @@ const ohm: SimulationDef = {
     body: {
       ar: "يوسف بيشحن موبايله في أوضة حرّانة في عز أغسطس في القاهرة. الشاحن سخن جداً والشحن بقى أبطأ من العادي. هل الحرارة ليها علاقة بالتيار اللي ماشي في السلك؟ تعالى ندخل جوه السلك نفسه ونشوف.",
       en: "Youssef is charging his phone in a hot Cairo room in mid-August. The charger is burning hot and charging feels slower than usual. Could heat be affecting the current in the wire? Let's go inside the wire and find out.",
+    },
+    why: {
+      ar: "فهم العلاقة بين الجهد والمقاومة والحرارة بيفسر سخونة الشواحن والأسلاك. وبيحميك من الحمل الزائد والحريق.",
+      en: "Knowing how voltage, resistance and heat set the current explains hot chargers and wires. It keeps you safe from overload and fires.",
     },
     question: {
       ar: "توقعك: لما السلك يسخن، التيار هيزيد ولا يقل؟",
@@ -551,6 +556,10 @@ const reactionRate: SimulationDef = {
       ar: "ماما سابت طبق الفول برة التلاجة في يوم حر، وبعد كام ساعة ريحته اتغيرت. نفس الطبق جوه التلاجة بيعيش أيام! الفرق كله في سرعة التفاعلات الكيميائية. تعالى نشوف الجزيئات وهي بتتصادم.",
       en: "Mom left a plate of foul out on a hot day and within hours it smelled off. In the fridge it lasts days! The difference is reaction rate. Let's watch the molecules collide.",
     },
+    why: {
+      ar: "سرعة التفاعل هي اللي بتحدد حفظ الأكل والدوا وأمان المصانع. والحرارة والتركيز مفتاح التحكم فيها.",
+      en: "Reaction rate decides how long food and medicine last and how safe factories are. Temperature and concentration are the keys to controlling it.",
+    },
     question: {
       ar: "توقعك: رفع الحرارة 10 درجات بيأثر قد إيه على السرعة؟",
       en: "Your guess: how much does +10°C change the rate?",
@@ -813,6 +822,10 @@ const diffusion: SimulationDef = {
     body: {
       ar: "الصبح بدري ريحة الطعمية السخنة بتوصل لحد شباكك. الجزيئات بتتحرك من المكان الزحمة للمكان الفاضي — وده بالظبط اللي بيحصل عبر غشاء الخلية كل ثانية في جسمك.",
       en: "Early morning, the smell of hot ta'meya reaches your window. Molecules move from crowded to empty spaces — exactly what happens across your cell membranes every second.",
+    },
+    why: {
+      ar: "الانتشار بيدخّل الأكسجين والغذا للخلايا وبيطلّع الفضلات. ولو الغشاء اتلف الخلية بتتأذى.",
+      en: "Diffusion brings oxygen and nutrients into cells and carries waste out. If the membrane is damaged, the cell suffers.",
     },
     question: {
       ar: "توقعك: لو فرق التركيز بقى صفر، الانتشار هيحصل؟",

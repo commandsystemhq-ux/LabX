@@ -9,9 +9,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LessonWorkspace } from "@/components/lesson/LessonWorkspace";
 import { findLesson } from "@/data/mockCurriculum";
 import { NoorAssistant } from "@/components/noor/NoorAssistant";
-import { NoorProvider } from "@/components/noor/NoorProvider";
+import { NoorProvider, useNoorLesson } from "@/components/noor/NoorProvider";
 import { LanguageProvider } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
+
+/** Exposes what the lesson page tells Noor, so tests can assert on the live context. */
+function NoorCtxProbe() {
+  const ctx = useNoorLesson()?.ctx;
+  return (
+    <output data-testid="noor-ctx">
+      {JSON.stringify({
+        step: ctx?.step,
+        prediction: ctx?.prediction ?? null,
+        quizMistake: ctx?.quizMistake ?? null,
+        errorMode: ctx?.errorMode,
+        hazards: ctx?.hazards.length,
+      })}
+    </output>
+  );
+}
+const noorCtx = () =>
+  JSON.parse(screen.getByTestId("noor-ctx").textContent ?? "{}") as {
+    step: number;
+    prediction: string | null;
+    quizMistake: { question: string; chosen: string; correct: string } | null;
+    errorMode: boolean;
+    hazards: number;
+  };
 
 async function mountLesson(id: string) {
   const lookup = findLesson(id);
@@ -23,6 +47,7 @@ async function mountLesson(id: string) {
             <LessonWorkspace lookup={lookup} />
           </div>
           <NoorAssistant />
+          <NoorCtxProbe />
         </NoorProvider>
       </LanguageProvider>
     ),
@@ -121,5 +146,62 @@ describe("LessonWorkspace (all three subjects)", () => {
     });
     expect(saved.xp).toBe(75);
     expect(screen.getByText("+75 XP")).toBeInTheDocument();
+  });
+});
+
+describe("Interaction loop wired to Noor", () => {
+  it("step 1 asks for a written prediction, keeps it and shows it again while experimenting", async () => {
+    await mountLesson("g12-physics-u1-l2");
+    expect(screen.getByText("ليه ده مهم؟")).toBeInTheDocument();
+    const box = screen.getByLabelText("اكتب توقعك قبل ما تجرّب");
+    expect(box).toHaveAttribute("maxlength", "200");
+    expect(noorCtx().prediction).toBeNull();
+
+    await act(async () => {
+      fireEvent.change(box, { target: { value: "  التيار هيقل لأن المقاومة بتزيد  " } });
+    });
+    // Typing alone does not push to Noor; leaving the field / the step does.
+    expect(noorCtx().prediction).toBeNull();
+    await click(screen.getByRole("button", { name: /يلا نفهم اللي بيحصل/ }));
+    expect(noorCtx()).toMatchObject({ step: 2, prediction: "التيار هيقل لأن المقاومة بتزيد" });
+
+    await click(screen.getByRole("button", { name: /تجربة حرة/ }));
+    expect(screen.getByText("التيار هيقل لأن المقاومة بتزيد")).toBeInTheDocument();
+    expect(noorCtx().step).toBe(3);
+  });
+
+  it("a blank prediction is not sent to Noor", async () => {
+    await mountLesson("g12-physics-u1-l2");
+    const box = screen.getByLabelText("اكتب توقعك قبل ما تجرّب");
+    await act(async () => {
+      fireEvent.change(box, { target: { value: "   " } });
+      fireEvent.blur(box);
+    });
+    expect(noorCtx().prediction).toBeNull();
+  });
+
+  it("free lab extremes reach Noor as error mode and live hazards", async () => {
+    await mountLesson("g12-physics-u1-l2");
+    await click(screen.getByRole("button", { name: /تجربة حرة/ }));
+    await click(screen.getByRole("switch", { name: "وضع الأخطاء الواقعية" }));
+    await click(screen.getByRole("radio", { name: /قصر دائرة/ }));
+    expect(noorCtx()).toMatchObject({ step: 3, errorMode: true });
+    expect(noorCtx().hazards).toBeGreaterThan(0);
+  });
+
+  it("a wrong quiz answer gives Noor the question, the pick and the right answer", async () => {
+    await mountLesson("g12-physics-u1-l2");
+    await click(screen.getByRole("button", { name: /اختبار الفهم/ }));
+    expect(noorCtx().quizMistake).toBeNull();
+    await click(screen.getByRole("button", { name: /تتضاعف/ }));
+    const mistake = noorCtx().quizMistake;
+    expect(mistake?.chosen).toMatch(/تتضاعف/);
+    expect(mistake?.correct).toBeTruthy();
+    expect(mistake?.question).toBeTruthy();
+
+    // It stays available while the student studies the live demo.
+    await click(screen.getByRole("button", { name: /شاهد الخطأ عملياً في المحاكاة/ }));
+    expect(noorCtx()).toMatchObject({ step: 3 });
+    expect(noorCtx().quizMistake?.chosen).toMatch(/تتضاعف/);
   });
 });

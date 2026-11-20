@@ -8,10 +8,13 @@ export function StepGuide({
   sim,
   step,
   onStep,
+  prediction,
 }: {
   sim: SimulationDef;
   step: number;
   onStep: (s: number) => void;
+  /** The student's step-1 guess, shown again so they can compare it with what they see. */
+  prediction?: string | null | undefined;
 }) {
   const { t, l, dir } = useLang();
   const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
@@ -19,6 +22,7 @@ export function StepGuide({
   if (step === 2) {
     return (
       <div className="glass animate-fade-up rounded-3xl p-4 sm:p-5">
+        <Prediction text={prediction} />
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <ol className="grid flex-1 gap-2 sm:grid-cols-3">
             {sim.explain.map((e, i) => (
@@ -43,17 +47,31 @@ export function StepGuide({
 
   if (step === 3) {
     return (
-      <div className="glass flex animate-fade-up flex-col items-start gap-3 rounded-3xl p-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
-          <MonitorPlay className="size-5 shrink-0 text-subject" />
-          {t("labHint")}
-        </p>
-        <Button variant="subject" className="shrink-0 rounded-full" onClick={() => onStep(4)}>
-          {t("goQuiz")} <Arrow />
-        </Button>
+      <div className="glass animate-fade-up rounded-3xl p-4">
+        <Prediction text={prediction} />
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
+            <MonitorPlay className="size-5 shrink-0 text-subject" />
+            {t("labHint")}
+          </p>
+          <Button variant="subject" className="shrink-0 rounded-full" onClick={() => onStep(4)}>
+            {t("goQuiz")} <Arrow />
+          </Button>
+        </div>
       </div>
     );
   }
 
   return null;
+}
+
+function Prediction({ text }: { text: string | null | undefined }) {
+  const { t } = useLang();
+  if (!text) return null;
+  return (
+    <p className="mb-3 break-words rounded-2xl border border-subject/30 bg-subject/10 p-3 text-sm">
+      <span className="font-bold text-subject">🤔 {t("yourPrediction")}: </span>
+      {text}
+    </p>
+  );
 }

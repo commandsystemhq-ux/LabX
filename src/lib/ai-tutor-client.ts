@@ -94,6 +94,16 @@ export async function requestAiReply(p: AiReplyParams): Promise<string | null> {
       ? { simId: lesson.sim.id, step: ctx.step, mode: ctx.mode, view: ctx.view }
       : {}),
     ...(guidedTask ? { task: guidedTask[p.lang].slice(0, 300) } : {}),
+    ...(ctx?.prediction ? { prediction: ctx.prediction.slice(0, 200) } : {}),
+    ...(ctx?.quizMistake
+      ? {
+          quizMistake:
+            `${ctx.quizMistake.question} | picked: ${ctx.quizMistake.chosen} | correct: ${ctx.quizMistake.correct}`.slice(
+              0,
+              500,
+            ),
+        }
+      : {}),
   };
 
   const ask = p.ask ?? (askAiTutorFn as unknown as Ask);
