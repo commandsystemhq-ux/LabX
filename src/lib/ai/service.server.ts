@@ -73,7 +73,7 @@ const publicGeneration = (
   const g = generationOf(c);
   return {
     maxTokens: g.maxTokens,
-    temperature: g.temperature,
+    temperature: g.temperature ?? null,
     timeoutSec: g.timeoutMs / 1000,
     extraInstructions: c.extraInstructions ?? "",
   };

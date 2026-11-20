@@ -174,7 +174,7 @@ function finish(text: unknown): string {
   return text.trim().slice(0, MAX_REPLY_CHARS);
 }
 
-/** Saved generation settings with defaults applied. */
+/** Saved generation settings with defaults applied; `temperature` stays undefined (not sent) when unset. */
 export function generationOf(config: {
   maxTokens?: number | undefined;
   temperature?: number | undefined;
@@ -182,7 +182,7 @@ export function generationOf(config: {
 }) {
   return {
     maxTokens: config.maxTokens ?? GENERATION.maxTokens.def,
-    temperature: config.temperature ?? GENERATION.temperature.def,
+    temperature: config.temperature,
     timeoutMs: (config.timeoutSec ?? GENERATION.timeoutSec.def) * 1000,
   };
 }
@@ -221,6 +221,11 @@ export function classifyProviderError(
   return undefined;
 }
 
+/** Bedrock models (region + model id + path) that rejected `temperature`, so it isn't sent again. */
+const bedrockNoTemperature = new Set<string>();
+const TEMPERATURE_REJECTED_RE =
+  /temperature.*(deprecat|not supported|unsupported|does not support|doesn't support|isn't supported)|(deprecat|not supported|unsupported).*temperature/i;
+
 /**
  * Amazon Bedrock runtime (Converse by default, or InvokeModel with the Anthropic body). Authenticates
  * with a Bedrock API key (bearer) or with IAM credentials signed by SigV4 (service `bedrock`). The
@@ -237,21 +242,7 @@ export async function callBedrock(
   const host = `bedrock-runtime.${config.region}.amazonaws.com`;
   const invoke = config.apiMode === "invoke";
   const path = `/model/${encodeURIComponent(config.modelId)}/${invoke ? "invoke" : "converse"}`;
-  const bodyText = JSON.stringify(
-    invoke
-      ? {
-          anthropic_version: "bedrock-2023-05-31",
-          max_tokens: g.maxTokens,
-          temperature: g.temperature,
-          system: prompts.system,
-          messages: [{ role: "user", content: [{ type: "text", text: prompts.user }] }],
-        }
-      : {
-          system: [{ text: prompts.system }],
-          messages: [{ role: "user", content: [{ text: prompts.user }] }],
-          inferenceConfig: { maxTokens: g.maxTokens, temperature: g.temperature },
-        },
-  );
+  const quirkKey = `${config.region}|${config.modelId}|${invoke ? "invoke" : "converse"}`;
   const secrets = [
     config.apiKey,
     config.accessKeyId,
@@ -259,42 +250,85 @@ export async function callBedrock(
     config.sessionToken,
   ].filter((s): s is string => typeof s === "string" && s.length > 0);
 
-  let headers: Record<string, string>;
-  if ((config.authMode ?? "apikey") === "iam") {
-    if (!config.accessKeyId || !config.secretAccessKey) {
-      throw new ProviderError("missing IAM credentials", undefined, "AWS credentials are not set.");
-    }
-    headers = await signV4({
-      method: "POST",
-      host,
-      path,
-      headers: { "content-type": "application/json" },
-      body: bodyText,
-      region: config.region,
-      service: "bedrock",
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-      sessionToken: config.sessionToken,
-      now: now(),
-    });
-  } else {
-    if (!config.apiKey) {
-      throw new ProviderError("missing API key", undefined, "The Bedrock API key is not set.");
-    }
-    headers = { authorization: `Bearer ${config.apiKey}` };
-  }
+  const deadline = Date.now() + g.timeoutMs;
 
-  const data = (await postJson(
-    fetchImpl,
-    `https://${host}${path}`,
-    headers,
-    bodyText,
-    secrets,
-    g.timeoutMs,
-  )) as {
-    output?: { message?: { content?: { text?: unknown }[] } };
-    content?: { text?: unknown }[];
+  /** One request; rebuilt (and re-signed for IAM) per attempt because the body may change. */
+  const send = async (temperature: number | undefined) => {
+    const bodyText = JSON.stringify(
+      invoke
+        ? {
+            anthropic_version: "bedrock-2023-05-31",
+            max_tokens: g.maxTokens,
+            ...(temperature !== undefined ? { temperature } : {}),
+            system: prompts.system,
+            messages: [{ role: "user", content: [{ type: "text", text: prompts.user }] }],
+          }
+        : {
+            system: [{ text: prompts.system }],
+            messages: [{ role: "user", content: [{ text: prompts.user }] }],
+            inferenceConfig: {
+              maxTokens: g.maxTokens,
+              ...(temperature !== undefined ? { temperature } : {}),
+            },
+          },
+    );
+    let headers: Record<string, string>;
+    if ((config.authMode ?? "apikey") === "iam") {
+      if (!config.accessKeyId || !config.secretAccessKey) {
+        throw new ProviderError(
+          "missing IAM credentials",
+          undefined,
+          "AWS credentials are not set.",
+        );
+      }
+      headers = await signV4({
+        method: "POST",
+        host,
+        path,
+        headers: { "content-type": "application/json" },
+        body: bodyText,
+        region: config.region,
+        service: "bedrock",
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        sessionToken: config.sessionToken,
+        now: now(),
+      });
+    } else {
+      if (!config.apiKey) {
+        throw new ProviderError("missing API key", undefined, "The Bedrock API key is not set.");
+      }
+      headers = { authorization: `Bearer ${config.apiKey}` };
+    }
+    return (await postJson(
+      fetchImpl,
+      `https://${host}${path}`,
+      headers,
+      bodyText,
+      secrets,
+      Math.max(1000, deadline - Date.now()),
+    )) as {
+      output?: { message?: { content?: { text?: unknown }[] } };
+      content?: { text?: unknown }[];
+    };
   };
+
+  const skipTemperature = g.temperature === undefined || bedrockNoTemperature.has(quirkKey);
+  let data: Awaited<ReturnType<typeof send>>;
+  try {
+    data = await send(skipTemperature ? undefined : g.temperature);
+  } catch (error) {
+    // Newer models reject `temperature` (deprecated / unsupported): retry once without it and remember.
+    const retry =
+      !skipTemperature &&
+      error instanceof ProviderError &&
+      error.status === 400 &&
+      TEMPERATURE_REJECTED_RE.test(error.detail ?? "");
+    if (!retry) throw error;
+    data = await send(undefined);
+    if (bedrockNoTemperature.size > 200) bedrockNoTemperature.clear();
+    bedrockNoTemperature.add(quirkKey);
+  }
   const blocks = invoke ? data.content : data.output?.message?.content;
   return finish(blocks?.find((c) => typeof c.text === "string")?.text);
 }
@@ -332,7 +366,9 @@ export async function callAzure(
         { role: "user", content: prompts.user },
       ],
       [quirks.tokenField]: g.maxTokens,
-      ...(quirks.sendTemperature ? { temperature: g.temperature } : {}),
+      ...(quirks.sendTemperature && g.temperature !== undefined
+        ? { temperature: g.temperature }
+        : {}),
     });
     try {
       const data = (await postJson(

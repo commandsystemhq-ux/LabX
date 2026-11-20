@@ -305,8 +305,14 @@ export const ui = {
     en: "16 to 4096. Reasoning models need a larger value.",
   },
   adminTemperature: { ar: "Temperature", en: "Temperature" },
-  adminTemperatureHintBedrock: { ar: "من 0 إلى 1.", en: "0 to 1." },
-  adminTemperatureHintAzure: { ar: "من 0 إلى 2.", en: "0 to 2." },
+  adminTemperatureHintBedrock: {
+    ar: "من 0 إلى 1. اتركه فاضي لعدم إرساله (موديلات بترفضه). لو الموديل رفضه بيتجاب تلقائياً من غيره.",
+    en: "0 to 1. Leave empty to not send it (some models reject it). If a model rejects it, it is retried without it automatically.",
+  },
+  adminTemperatureHintAzure: {
+    ar: "من 0 إلى 2. اتركه فاضي لعدم إرساله.",
+    en: "0 to 2. Leave empty to not send it.",
+  },
   adminTimeout: { ar: "مهلة الاتصال (ثانية)", en: "Timeout (seconds)" },
   adminTimeoutHint: { ar: "من 3 إلى 60.", en: "3 to 60." },
   adminInstructions: {

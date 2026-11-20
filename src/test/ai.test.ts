@@ -810,3 +810,86 @@ describe("Azure OpenAI generation compatibility", () => {
     expect(normalizeAzureEndpoint("r.openai.azure.com/")).toBe("https://r.openai.azure.com");
   });
 });
+
+describe("Bedrock temperature compatibility", () => {
+  const prompts = { system: "s", user: "u" };
+  const rejects = (message: string) => new Response(JSON.stringify({ message }), { status: 400 });
+  const bodyOf = (f: ReturnType<typeof vi.fn>, i: number) =>
+    JSON.parse((f.mock.calls[i] as unknown as [string, RequestInit])[1].body as string) as {
+      inferenceConfig?: Record<string, unknown>;
+      temperature?: unknown;
+    };
+
+  it("retries Converse without temperature when it is deprecated, and remembers the model", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { inferenceConfig: Record<string, unknown> };
+      return "temperature" in body.inferenceConfig
+        ? rejects("`temperature` is deprecated for this model.")
+        : Response.json({ output: { message: { content: [{ text: "fine" }] } } });
+    });
+    const cfg = {
+      region: "us-east-1",
+      modelId: "us.anthropic.claude-opus-test-1",
+      apiKey: "key-123456",
+      temperature: 0.4,
+    };
+    expect(await callBedrock(cfg, prompts, f as unknown as typeof fetch)).toBe("fine");
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(bodyOf(f, 1).inferenceConfig).not.toHaveProperty("temperature");
+    expect(await callBedrock(cfg, prompts, f as unknown as typeof fetch)).toBe("fine");
+    expect(f).toHaveBeenCalledTimes(3); // remembered: no failed round trip
+  });
+
+  it("re-signs the InvokeModel retry for IAM and does not retry unrelated 400s", async () => {
+    const f = vi.fn(async (_u: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { temperature?: unknown };
+      return body.temperature !== undefined
+        ? rejects("temperature is not supported for this model")
+        : Response.json({ content: [{ type: "text", text: "signed" }] });
+    });
+    const iamCfg = {
+      region: "eu-west-1",
+      modelId: "eu.anthropic.claude-opus-test-2",
+      apiMode: "invoke" as const,
+      authMode: "iam" as const,
+      accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+      secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+      temperature: 0.4,
+    };
+    expect(await callBedrock(iamCfg, prompts, f as unknown as typeof fetch)).toBe("signed");
+    const sig = (i: number) =>
+      ((f.mock.calls[i] as unknown as [string, RequestInit])[1].headers as Record<string, string>)[
+        "authorization"
+      ];
+    expect(sig(1)).toMatch(/Signature=[0-9a-f]{64}$/);
+    expect(sig(1)).not.toBe(sig(0));
+
+    const other = vi.fn(async () => rejects("The provided model identifier is invalid."));
+    await expect(
+      callBedrock(
+        {
+          region: "us-east-1",
+          modelId: "anthropic.claude-x",
+          apiKey: "key-123456",
+          temperature: 0.4,
+        },
+        prompts,
+        other as unknown as typeof fetch,
+      ),
+    ).rejects.toBeInstanceOf(ProviderError);
+    expect(other).toHaveBeenCalledTimes(1);
+  });
+
+  it("never sends temperature when it is left empty", async () => {
+    const f = vi.fn(async () =>
+      Response.json({ output: { message: { content: [{ text: "ok" }] } } }),
+    );
+    await callBedrock(
+      { region: "us-east-1", modelId: "anthropic.claude-empty", apiKey: "key-123456" },
+      prompts,
+      f as unknown as typeof fetch,
+    );
+    expect(bodyOf(f, 0).inferenceConfig).not.toHaveProperty("temperature");
+    expect(bodyOf(f, 0).inferenceConfig).toMatchObject({ maxTokens: 450 });
+  });
+});

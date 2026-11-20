@@ -258,7 +258,8 @@ export type AskTutorResult =
 /** Generation settings as shown to the admin (defaults filled in). */
 export interface PublicGeneration {
   maxTokens: number;
-  temperature: number;
+  /** Null = not sent to the provider (model default). */
+  temperature: number | null;
   timeoutSec: number;
   extraInstructions: string;
 }

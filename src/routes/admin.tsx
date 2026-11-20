@@ -120,7 +120,7 @@ function toForm(s: PublicAiSettings): Form {
     bedrockSessionToken: "",
     bedrockClearSession: false,
     bedrockMaxTokens: String(s.bedrock?.maxTokens ?? GENERATION.maxTokens.def),
-    bedrockTemperature: String(s.bedrock?.temperature ?? GENERATION.temperature.def),
+    bedrockTemperature: s.bedrock?.temperature == null ? "" : String(s.bedrock.temperature),
     bedrockTimeout: String(s.bedrock?.timeoutSec ?? GENERATION.timeoutSec.def),
     bedrockInstructions: s.bedrock?.extraInstructions ?? "",
     azureEndpoint: s.azure?.endpoint ?? "",
@@ -129,7 +129,7 @@ function toForm(s: PublicAiSettings): Form {
     azureRegion: s.azure?.region ?? "",
     azureKey: "",
     azureMaxTokens: String(s.azure?.maxTokens ?? GENERATION.maxTokens.def),
-    azureTemperature: String(s.azure?.temperature ?? GENERATION.temperature.def),
+    azureTemperature: s.azure?.temperature == null ? "" : String(s.azure.temperature),
     azureTimeout: String(s.azure?.timeoutSec ?? GENERATION.timeoutSec.def),
     azureInstructions: s.azure?.extraInstructions ?? "",
   };
