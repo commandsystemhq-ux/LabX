@@ -106,7 +106,7 @@ describe("curriculum enrichment", () => {
 });
 
 describe("real-world faults", () => {
-  const ids = ["ohm", "reaction-rate", "diffusion"] as const;
+  const ids = ["ohm", "reaction-rate", "diffusion", "adrenaline"] as const;
 
   it("every fault warns in both languages (sealed-vessel pressure needs a fast reaction)", () => {
     for (const id of ids) {

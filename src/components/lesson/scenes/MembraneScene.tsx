@@ -6,7 +6,7 @@ import { frac, rand, type SceneProps, tri, useIntegrated } from "./sceneUtils";
 export function MembraneScene({ t, values, activity, labels, flow }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { crossing } = computeDiffusion(
+  const { crossing, leaky, blocked } = computeDiffusion(
     values.temperature,
     values.gradient,
     values.permeability,
@@ -21,10 +21,15 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
   const crossers = values.gradient > 0 && channels > 0 ? Math.round(2 + activity * 10) : 0;
   const mx = 300;
 
+  // A damaged / denatured membrane shows torn gaps in the bilayer instead of a clean wall.
+  const tornY: number[] = [];
   const heads: number[] = [];
   for (let y = 50; y <= 330; y += 14) {
-    if (!channelY.some((c) => Math.abs(c - y) < 16)) heads.push(y);
+    if (channelY.some((c) => Math.abs(c - y) < 16)) continue;
+    if (leaky && Math.round(y / 14) % 3 === 0) tornY.push(y);
+    else heads.push(y);
   }
+  const headTone = leaky ? "var(--destructive)" : "var(--bio)";
 
   const bounce = (i: number, side: "l" | "r") => {
     const x0 = side === "l" ? 40 : mx + 30;
@@ -56,8 +61,8 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
       {/* Bilayer */}
       {heads.map((y) => (
         <g key={y}>
-          <circle cx={mx - 14} cy={y} r="6" fill="var(--bio)" fillOpacity="0.8" />
-          <circle cx={mx + 14} cy={y} r="6" fill="var(--bio)" fillOpacity="0.8" />
+          <circle cx={mx - 14} cy={y} r="6" fill={headTone} fillOpacity="0.8" />
+          <circle cx={mx + 14} cy={y} r="6" fill={headTone} fillOpacity="0.8" />
           <line
             x1={mx - 8}
             y1={y - 2}
@@ -76,6 +81,18 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
           />
         </g>
       ))}
+      {tornY.map((y) => (
+        <g key={`t${y}`} stroke="var(--destructive)" strokeWidth="2" strokeLinecap="round">
+          <line x1={mx - 16} y1={y - 5} x2={mx - 6} y2={y + 5} />
+          <line x1={mx + 16} y1={y - 5} x2={mx + 6} y2={y + 5} />
+        </g>
+      ))}
+      {tornY.length > 0 &&
+        Array.from({ length: Math.min(8, Math.round(2 + activity * 8)) }, (_, i) => {
+          const y = tornY[i % tornY.length] ?? 190;
+          const x = 60 + frac(cross * (0.7 + rand(i, 81) * 0.6) + rand(i, 82)) * 480;
+          return <circle key={`leak${i}`} cx={x} cy={y} r="5" fill="var(--destructive)" />;
+        })}
       {channelY.map((y) => (
         <g key={y}>
           <rect
@@ -96,6 +113,13 @@ export function MembraneScene({ t, values, activity, labels, flow }: SceneProps)
             fill="var(--warning)"
             opacity="0.8"
           />
+          {blocked && (
+            <g stroke="var(--destructive)" strokeWidth="3" strokeLinecap="round">
+              <rect x={mx - 10} y={y - 9} width="20" height="18" rx="4" fill="var(--destructive)" />
+              <line x1={mx - 6} y1={y - 5} x2={mx + 6} y2={y + 5} stroke="var(--foreground)" />
+              <line x1={mx + 6} y1={y - 5} x2={mx - 6} y2={y + 5} stroke="var(--foreground)" />
+            </g>
+          )}
         </g>
       ))}
 

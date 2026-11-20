@@ -188,6 +188,8 @@ export const ui = {
   sbJourneys: { ar: "رحلات الاستكشاف", en: "Exploration journeys" },
   sbKitchen: { ar: "المطبخ الكيميائي", en: "Chemistry kitchen" },
   sbSoon: { ar: "قريباً", en: "Soon" },
+  sbNew: { ar: "جديد", en: "New" },
+  sbMoreJourneys: { ar: "رحلات جديدة", en: "More journeys" },
   sbNoor: { ar: "اسأل نور", en: "Ask Noor" },
   sbHome: { ar: "الصفحة الرئيسية", en: "Home" },
   noorNewChat: { ar: "محادثة جديدة", en: "New chat" },

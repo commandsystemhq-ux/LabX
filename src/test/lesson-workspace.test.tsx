@@ -205,3 +205,34 @@ describe("Interaction loop wired to Noor", () => {
     expect(noorCtx().quizMistake?.chosen).toMatch(/تتضاعف/);
   });
 });
+
+describe("Biology journey: the adrenaline & heart lesson", () => {
+  it("runs the 4-step loop with live physiology and shows failures, not just text", async () => {
+    await mountLesson("g12-biology-u4-l1");
+    expect(screen.getByText(/كن أنت: ليه قلبك بيدق/)).toBeInTheDocument();
+    expect(screen.getByLabelText("اكتب توقعك قبل ما تجرّب")).toBeInTheDocument();
+
+    await click(screen.getByRole("button", { name: /تجربة حرة/ }));
+    // Live graph + readouts follow the sliders.
+    expect(screen.getAllByText("معدل النبض").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("استجابة المخ").length).toBeGreaterThan(0);
+    expect(noorCtx()).toMatchObject({ step: 3, errorMode: false, hazards: 0 });
+
+    await click(screen.getByRole("switch", { name: "وضع الأخطاء الواقعية" }));
+    await click(screen.getByRole("radio", { name: /تضيّق شريان المخ/ }));
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("شريان المخ ضيّق");
+    expect(noorCtx()).toMatchObject({ errorMode: true });
+    expect(noorCtx().hazards).toBeGreaterThan(0);
+  });
+
+  it("a wrong quiz answer opens the live demo and tells Noor what went wrong", async () => {
+    await mountLesson("g12-biology-u4-l1");
+    await click(screen.getByRole("button", { name: /اختبار الفهم/ }));
+    await click(screen.getByRole("button", { name: /أقل من الطبيعي/ }));
+    expect(noorCtx().quizMistake?.chosen).toMatch(/أقل من الطبيعي/);
+    await click(screen.getByRole("button", { name: /شاهد الخطأ عملياً في المحاكاة/ }));
+    expect(screen.getByText("وضع العرض العملي")).toBeInTheDocument();
+    expect(noorCtx().step).toBe(3);
+  });
+});

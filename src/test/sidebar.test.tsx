@@ -79,10 +79,15 @@ describe("Collapsible sidebar", () => {
       /^\/lesson\?id=/,
     );
     // Future sections are visible but not navigable.
-    for (const name of ["رحلات الاستكشاف", "المطبخ الكيميائي"]) {
+    for (const name of ["رحلات جديدة", "المطبخ الكيميائي"]) {
       expect(nav.queryByRole("link", { name })).toBeNull();
       expect(nav.getByText(name).closest("[aria-disabled='true']")).not.toBeNull();
     }
+    // The adrenaline journey is a real, clearly labelled entry under "Exploration journeys".
+    expect(nav.getByRole("heading", { name: "رحلات الاستكشاف" })).toBeTruthy();
+    expect(nav.getByRole("link", { name: /رحلة الأدرينالين والقلب/ }).getAttribute("href")).toBe(
+      "/lesson?id=g12-biology-u4-l1",
+    );
     expect(nav.getByRole("button", { name: "اسأل نور" })).toBeTruthy();
     expect(
       nav.getByRole("link", { name: "لوحة المنهج والدروس" }).getAttribute("aria-current"),
@@ -157,5 +162,25 @@ describe("Collapsible sidebar", () => {
     expect(screen.getByTestId("noor-open").textContent).toBe("false");
     fireEvent.click(screen.getByRole("button", { name: "اسأل نور" }));
     expect(screen.getByTestId("noor-open").textContent).toBe("true");
+  });
+});
+
+describe("Journey entry in the sidebar", () => {
+  it("highlights the journey, not the generic simulations link, while its lesson is open", async () => {
+    await mount("/lesson?id=g12-biology-u4-l1");
+    const side = within(screen.getByRole("complementary", { name: "التنقل الرئيسي" }));
+    expect(
+      side.getByRole("link", { name: /رحلة الأدرينالين والقلب/ }).getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      side.getByRole("link", { name: "المحاكاة التفاعلية" }).getAttribute("aria-current"),
+    ).toBeNull();
+
+    cleanup();
+    await mount("/lesson?id=g12-physics-u1-l2");
+    const other = within(screen.getByRole("complementary", { name: "التنقل الرئيسي" }));
+    expect(
+      other.getByRole("link", { name: "المحاكاة التفاعلية" }).getAttribute("aria-current"),
+    ).toBe("page");
   });
 });

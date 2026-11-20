@@ -15,6 +15,9 @@ export type SimKey =
   | "catalyst"
   | "gradient"
   | "permeability"
+  | "adrenaline"
+  | "oxygen"
+  | "glucose"
   /** Injected real-world fault (0 = none). Meaning is defined per simulation in simExtras. */
   | "fault";
 
@@ -117,6 +120,9 @@ export function defaultsOf(sim: SimulationDef): SimValues {
     catalyst: 0,
     gradient: 0,
     permeability: 0,
+    adrenaline: 0,
+    oxygen: 0,
+    glucose: 0,
     fault: 0,
   };
   for (const v of sim.variables) base[v.key] = v.default;
@@ -951,8 +957,292 @@ const diffusion: SimulationDef = {
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* Biology — "Be you": adrenaline, the heart, blood flow and the brain */
+/* ------------------------------------------------------------------ */
+
+/** Extra adrenaline (percentage points) injected by the "adrenaline surge" fault. */
+export const ADRENALINE_SURGE = 45;
+/** Share of the normal blood flow reaching the brain through a narrowed artery. */
+export const ARTERY_FLOW_FACTOR = 0.6;
+/** Share of the adrenaline response the heart still shows under a beta blocker. */
+export const BETA_BLOCK_FACTOR = 0.35;
+export const HR_TACHYCARDIA = 150;
+export const HR_CRITICAL = 180;
+/** Resting brain blood flow (mL/min): 15 % of a 4.9 L/min cardiac output. */
+const BRAIN_FLOW_REST = 735;
+
+/**
+ * Simplified physiology (teaching model, not medical advice).
+ * fault: 0 = none, 1 = adrenaline surge (+`ADRENALINE_SURGE`), 2 = narrowed brain artery
+ * (flow × `ARTERY_FLOW_FACTOR`), 3 = beta blocker (heart responds at `BETA_BLOCK_FACTOR`).
+ */
+export function computeAdrenaline(adrenaline: number, oxygen: number, glucose: number, fault = 0) {
+  const surged = fault === 1 ? Math.min(100, adrenaline + ADRENALINE_SURGE) : adrenaline;
+  const a = surged / 100;
+  const heartA = fault === 3 ? a * BETA_BLOCK_FACTOR : a;
+  // Low oxygen makes the heart compensate; far too little and it starts to fail.
+  const hypoxiaBoost = oxygen < 94 ? (94 - oxygen) * 1.2 : 0;
+  let hr = 60 + 105 * heartA ** 0.9 + hypoxiaBoost;
+  if (oxygen < 70) hr *= 0.6;
+  hr = clamp(hr, 25, 220);
+  // At very high rates the ventricles have no time to fill.
+  const filling = hr > 150 ? Math.max(0.45, 1 - (hr - 150) / 130) : 1;
+  const strokeVolume = 70 * (1 + 0.25 * heartA) * filling;
+  const output = (hr * strokeVolume) / 1000;
+  const brainFlow = output * 150 * (fault === 2 ? ARTERY_FLOW_FACTOR : 1);
+  // Oxygen content falls steeply with saturation, so a faster heart cannot fully make up for it.
+  const delivery = (brainFlow / BRAIN_FLOW_REST) * (oxygen / 98) ** 3;
+  const glucoseFactor = glucose >= 70 ? 1 : Math.max(0, (glucose - 30) / 40);
+  const sugarHigh = glucose > 250 ? 0.85 : glucose > 180 ? 0.95 : 1;
+  const arousal = a <= 0.6 ? 1 : Math.max(0.35, 1 - 1.5 * (a - 0.6));
+  const brain = clamp(
+    100 * Math.min(1, delivery) ** 1.5 * glucoseFactor * sugarHigh * arousal,
+    0,
+    100,
+  );
+  return { surged, hr, strokeVolume, output, brainFlow, delivery, glucoseFactor, arousal, brain };
+}
+
+const adrVars: SimVariable[] = [
+  {
+    key: "adrenaline",
+    label: { ar: "الأدرينالين", en: "Adrenaline" },
+    symbol: "E",
+    unit: "%",
+    min: 0,
+    max: 100,
+    step: 1,
+    default: 10,
+  },
+  {
+    key: "oxygen",
+    label: { ar: "أكسجين الدم", en: "Blood oxygen" },
+    symbol: "O₂",
+    unit: "%",
+    min: 60,
+    max: 100,
+    step: 1,
+    default: 98,
+  },
+  {
+    key: "glucose",
+    label: { ar: "جلوكوز الدم", en: "Blood glucose" },
+    symbol: "G",
+    unit: "mg/dL",
+    min: 30,
+    max: 300,
+    step: 5,
+    default: 90,
+  },
+];
+
+const adrenalineSim: SimulationDef = {
+  id: "adrenaline",
+  subject: "biology",
+  variables: adrVars,
+  readouts: (v) => {
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    return [
+      {
+        key: "hr",
+        label: { ar: "معدل النبض", en: "Heart rate" },
+        symbol: "HR",
+        value: p.hr,
+        unit: "bpm",
+        digits: 0,
+      },
+      {
+        key: "output",
+        label: { ar: "تدفق الدم", en: "Blood flow" },
+        symbol: "CO",
+        value: p.output,
+        unit: "L/min",
+        digits: 1,
+      },
+      {
+        key: "brain",
+        label: { ar: "استجابة المخ", en: "Brain response" },
+        symbol: "B",
+        value: p.brain,
+        unit: "%",
+        digits: 0,
+      },
+    ];
+  },
+  graph: (v) => {
+    const data = range(0, 100, 5).map((x) => ({
+      x,
+      y: computeAdrenaline(x, v.oxygen, v.glucose, v.fault).hr,
+      base: computeAdrenaline(x, 98, 90).hr,
+    }));
+    const maxY = Math.max(...data.map((d) => Math.max(d.y, d.base)));
+    return {
+      xLabel: { ar: "الأدرينالين", en: "Adrenaline" },
+      yLabel: { ar: "النبض", en: "Heart rate" },
+      xUnit: "%",
+      yUnit: "bpm",
+      data,
+      point: {
+        x: v.adrenaline,
+        y: computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault).hr,
+      },
+      yMax: niceCeil(maxY),
+    };
+  },
+  activity: (v) =>
+    clamp(computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault).hr / 200, 0, 1),
+  formula: "CO = HR × SV",
+  formulaLive: (v) => {
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    return `${f(p.output)} L/min = ${f(p.hr, 0)} × ${f(p.strokeVolume, 0)} mL`;
+  },
+  story: {
+    title: {
+      ar: "كن أنت: ليه قلبك بيدق لما تتخض؟",
+      en: "Be you: why does your heart pound when you get a fright?",
+    },
+    body: {
+      ar: "إنت ماشي في الشارع ومرة واحدة عربية فرملت جنبك بصوت عالي! في ثواني قلبك بيدق جامد وإيدك بتعرق وبقيت متنبه لكل حاجة. الغدة الكظرية فرزت الأدرينالين، وبتوصل لقلبك ومخك مع الدم. تعالى نركب جوه الدم ونشوف الرحلة.",
+      en: "You're walking down the street when a car brakes loudly beside you! Within seconds your heart pounds, your palms sweat and you notice everything. Your adrenal glands released adrenaline, and it travels to your heart and brain in the blood. Let's ride inside the bloodstream.",
+    },
+    why: {
+      ar: "فهم الأدرينالين بيفسر خوفك قبل الامتحان وإزاي جسمك بيستعد للخطر. وبيعلّمك امتى القلب والمخ بيتعبوا من نقص الأكسجين أو السكر.",
+      en: "Understanding adrenaline explains exam-day nerves and how your body prepares for danger. It also shows when the heart and brain struggle without oxygen or sugar.",
+    },
+    question: {
+      ar: "توقعك: لما الأدرينالين يزيد، النبض هيعمل إيه والمخ هيبقى أحسن ولا أسوأ؟",
+      en: "Your guess: when adrenaline rises, what happens to the heart rate, and does the brain work better or worse?",
+    },
+  },
+  explain: [
+    {
+      ar: "الأدرينالين بيرتبط بمستقبلات القلب فيدق أسرع وأقوى، وبيرفع الدم الواصل للعضلات والمخ.",
+      en: "Adrenaline binds to heart receptors so it beats faster and harder, sending more blood to muscles and brain.",
+    },
+    {
+      ar: "المخ محتاج أكسجين من الدم ومحتاج جلوكوز كوقود. لو واحد منهم قل، استجابة المخ بتضعف.",
+      en: "The brain needs oxygen from the blood and glucose as fuel. If either drops, the brain's response weakens.",
+    },
+    {
+      ar: "فوق حد معين الأدرينالين بيبوّظ الأداء: قلب سريع جداً مش بيلحق يتملي، فالدم الواصل للمخ بيقل.",
+      en: "Beyond a point adrenaline backfires: a very fast heart cannot fill, so less blood reaches the brain.",
+    },
+  ],
+  quiz: [
+    {
+      prompt: {
+        ar: "الأدرينالين وصل 80%. معدل النبض بيبقى…",
+        en: "Adrenaline reaches 80%. The heart rate becomes…",
+      },
+      options: [
+        { ar: "أقل من الطبيعي", en: "Lower than normal" },
+        { ar: "أعلى بوضوح", en: "Clearly higher" },
+        { ar: "زي ما هو", en: "Unchanged" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "الأدرينالين بينبّه مستقبلات القلب فيزيد عدد الدقات وقوة كل دقة.",
+        en: "Adrenaline stimulates heart receptors, raising both the rate and the force of each beat.",
+      },
+      demo: { adrenaline: 80 },
+      demoNote: {
+        ar: "الأدرينالين 80% — شوف القلب بيدق أسرع والدم بيجري أسرع.",
+        en: "Adrenaline 80% — watch the heart beat faster and the blood race.",
+      },
+      focus: "hr",
+      claims: { 0: 55, 2: 73 },
+    },
+    {
+      prompt: {
+        ar: "جلوكوز الدم نزل لـ 40 mg/dL. تأثير ده على المخ؟",
+        en: "Blood glucose drops to 40 mg/dL. What happens to the brain?",
+      },
+      options: [
+        { ar: "بيشتغل أسرع", en: "It works faster" },
+        {
+          ar: "استجابته بتضعف (دوخة أو إغماء)",
+          en: "Its response weakens (dizziness or fainting)",
+        },
+        { ar: "مفيش تأثير", en: "No effect" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "المخ بيعتمد على الجلوكوز كوقود أساسي، ولما يقل بسرعة بتضعف الاستجابة والتركيز.",
+        en: "The brain relies on glucose as its main fuel; when it falls, response and focus weaken.",
+      },
+      demo: { glucose: 40 },
+      demoNote: {
+        ar: "جلوكوز 40 — المخ بيفقد وقوده واستجابته بتنهار.",
+        en: "Glucose 40 — the brain loses its fuel and its response collapses.",
+      },
+      demoView: "molecular",
+      focus: "brain",
+      claims: { 0: 100, 2: 100 },
+    },
+    {
+      prompt: {
+        ar: "شخص بياخد حاصرات بيتا اتخض جداً (أدرينالين 90%). نبضه…",
+        en: "A person on a beta blocker gets a big fright (adrenaline 90%). Their heart rate…",
+      },
+      options: [
+        { ar: "يوصل 150 زي أي حد", en: "Reaches 150 like anyone else" },
+        {
+          ar: "يزيد شوية بس لأن الدواء بيكتم مستقبلات القلب",
+          en: "Rises only a little because the drug blunts the heart's receptors",
+        },
+        { ar: "يقف", en: "Stops" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "حاصرات بيتا بتغطي مستقبلات القلب فالأدرينالين مبيقدرش ينبّهه كامل.",
+        en: "Beta blockers cover the heart's receptors, so adrenaline cannot stimulate it fully.",
+      },
+      demo: { adrenaline: 90, fault: 3 },
+      demoNote: {
+        ar: "حاصرات بيتا: الأدرينالين عالي بس القلب متحفظ في الاستجابة.",
+        en: "Beta blocker: adrenaline is high but the heart responds only modestly.",
+      },
+      focus: "hr",
+      claims: { 0: 152, 2: 0 },
+    },
+  ],
+  context: (v, lang) => {
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    return lang === "ar"
+      ? `الأدرينالين = ${f(v.adrenaline, 0)}% • الأكسجين = ${f(v.oxygen, 0)}% • الجلوكوز = ${f(v.glucose, 0)} mg/dL • النبض = ${f(p.hr, 0)} bpm • تدفق الدم = ${f(p.output)} L/min • استجابة المخ = ${f(p.brain, 0)}%`
+      : `Adrenaline = ${f(v.adrenaline, 0)}% • O₂ = ${f(v.oxygen, 0)}% • Glucose = ${f(v.glucose, 0)} mg/dL • HR = ${f(p.hr, 0)} bpm • Blood flow = ${f(p.output)} L/min • Brain response = ${f(p.brain, 0)}%`;
+  },
+  tutor: (intent, v, lang, change) => {
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    const ar = lang === "ar";
+    if (intent === "colloquial")
+      return ar
+        ? `تخيل قلبك مضخة بتزود سرعتها لما الأدرينالين (${f(v.adrenaline, 0)}%) يوصلها. دلوقتي النبض ${f(p.hr, 0)} والدم بيجري ${f(p.output)} لتر في الدقيقة، والمخ شغال بنسبة ${f(p.brain, 0)}%.`
+        : `Picture your heart as a pump that speeds up when adrenaline (${f(v.adrenaline, 0)}%) reaches it. Now the rate is ${f(p.hr, 0)}, blood flows at ${f(p.output)} L/min and the brain works at ${f(p.brain, 0)}%.`;
+    if (intent === "why") {
+      if (!change) return ar ? "غيّر أي متغير وأنا أفسرلك." : "Change a variable and I'll explain.";
+      const label = adrVars.find((x) => x.key === change.key)?.label[lang] ?? change.key;
+      return ar
+        ? `غيرت ${label} من ${f(change.from, 0)} لـ ${f(change.to, 0)}، فالنبض بقى ${f(p.hr, 0)} bpm واستجابة المخ ${f(p.brain, 0)}%.`
+        : `You changed ${label} from ${f(change.from, 0)} to ${f(change.to, 0)}; the heart rate is now ${f(p.hr, 0)} bpm and the brain response ${f(p.brain, 0)}%.`;
+    }
+    if (intent === "example")
+      return ar
+        ? "قبل الماتش أو الامتحان قلبك بيدق أسرع بسبب الأدرينالين، وده بيجهزك للتركيز لحد حد معين."
+        : "Before a match or an exam your heart beats faster thanks to adrenaline, which readies you to focus up to a point.";
+    if (intent === "mistake")
+      return ar
+        ? "غلطة شائعة: إن كل ما الأدرينالين يزيد المخ يشتغل أحسن. فوق حد معين بيحصل ارتباك لأن القلب مش بيلحق يتملي."
+        : "Common mistake: more adrenaline always means a better brain. Past a point you get confusion because the heart can't fill.";
+    return ar
+      ? `الحالة دلوقتي: نبض ${f(p.hr, 0)} bpm، وتوصيل الدم للمخ ${f(p.delivery * 100, 0)}% من الطبيعي.`
+      : `Right now: ${f(p.hr, 0)} bpm, with brain delivery at ${f(p.delivery * 100, 0)}% of normal.`;
+  },
+};
 export const simulations: Record<SimulationId, SimulationDef> = {
   ohm,
   "reaction-rate": reactionRate,
   diffusion,
+  adrenaline: adrenalineSim,
 };

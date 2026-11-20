@@ -251,7 +251,7 @@ export const askTutorInput = z.object({
   page: z.enum(NOOR_PAGES),
   grade: z.enum(["g10", "g11", "g12"]).optional(),
   subject: z.enum(["biology", "physics", "chemistry"]).optional(),
-  simId: z.enum(["ohm", "reaction-rate", "diffusion"]).optional(),
+  simId: z.enum(["ohm", "reaction-rate", "diffusion", "adrenaline"]).optional(),
   step: z.number().int().min(1).max(4).optional(),
   mode: z.enum(["guided", "free"]).optional(),
   view: z.enum(["macro", "molecular"]).optional(),

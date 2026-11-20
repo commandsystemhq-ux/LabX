@@ -1,12 +1,14 @@
 import type { ComponentType } from "react";
 import type { SimulationId } from "@/data/mockCurriculum";
 import { BeakerScene } from "./BeakerScene";
+import { BodyScene } from "./BodyScene";
 import { CellScene } from "./CellScene";
 import { CircuitScene } from "./CircuitScene";
 import { LatticeScene } from "./LatticeScene";
 import { MembraneScene } from "./MembraneScene";
 import { ParticleBoxScene } from "./ParticleBoxScene";
 import type { SceneProps } from "./sceneUtils";
+import { SignalScene } from "./SignalScene";
 
 export type StageView = "macro" | "molecular";
 
@@ -15,4 +17,5 @@ export const scenes: Record<SimulationId, Record<StageView, ComponentType<SceneP
   ohm: { macro: CircuitScene, molecular: LatticeScene },
   "reaction-rate": { macro: BeakerScene, molecular: ParticleBoxScene },
   diffusion: { macro: CellScene, molecular: MembraneScene },
+  adrenaline: { macro: BodyScene, molecular: SignalScene },
 };

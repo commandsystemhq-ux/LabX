@@ -1,11 +1,17 @@
 import { ui, type L10n } from "@/lib/i18n";
 import type { SimPreset, SimulationId } from "./mockCurriculum";
 import {
+  ADRENALINE_SURGE,
+  ARTERY_FLOW_FACTOR,
+  BETA_BLOCK_FACTOR,
   BLOCKED_CHANNEL_FACTOR,
+  computeAdrenaline,
   computeDiffusion,
   computeOhm,
   computeRate,
   DENATURE_C,
+  HR_CRITICAL,
+  HR_TACHYCARDIA,
   RUNAWAY_DELTA_C,
   VOLTMETER_R,
   type SimKey,
@@ -968,10 +974,323 @@ export function microscopeInfo(v: SimValues, view: "macro" | "molecular") {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Biology — "Be you": adrenaline, heart, blood flow and brain          */
+/* ------------------------------------------------------------------ */
+
+const adrenalineExtras: SimExtras = {
+  effect: "cellular",
+  faults: [
+    {
+      id: 1,
+      label: { ar: "نوبة أدرينالين زائدة", en: "Adrenaline surge" },
+      description: {
+        ar: `الغدة الكظرية بتفرز كمية إضافية فالأدرينالين بيزيد ${ADRENALINE_SURGE} نقطة فوق اللي ضابطه.`,
+        en: `The adrenal glands release an extra burst: adrenaline rises ${ADRENALINE_SURGE} points above the setting.`,
+      },
+    },
+    {
+      id: 2,
+      label: { ar: "تضيّق شريان المخ", en: "Narrowed brain artery" },
+      description: {
+        ar: `الدم الواصل للمخ بيقل لـ ${Math.round(ARTERY_FLOW_FACTOR * 100)}% بسبب ترسّبات في الشريان.`,
+        en: `Deposits narrow the artery so only ${Math.round(ARTERY_FLOW_FACTOR * 100)}% of the blood reaches the brain.`,
+      },
+    },
+    {
+      id: 3,
+      label: { ar: "حاصرات بيتا (دواء)", en: "Beta blocker (drug)" },
+      description: {
+        ar: `الدواء بيغطي مستقبلات القلب فبيستجيب بـ ${Math.round(BETA_BLOCK_FACTOR * 100)}% بس من تأثير الأدرينالين.`,
+        en: `The drug covers the heart's receptors, so it shows only ${Math.round(BETA_BLOCK_FACTOR * 100)}% of the adrenaline effect.`,
+      },
+    },
+  ],
+  hazards: (v) => {
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    const out: Hazard[] = [];
+
+    if (p.hr >= HR_CRITICAL) {
+      out.push({
+        id: "tachy-critical",
+        level: 2,
+        title: { ar: "قلب سريع لدرجة خطيرة", en: "Dangerously fast heart" },
+        cause: {
+          ar: `النبض ${f(p.hr, 0)} bpm والقلب مش بيلحق يتملي`,
+          en: `${f(p.hr, 0)} bpm: the heart cannot fill between beats`,
+        },
+        consequence: {
+          ar: "الدم الخارج من القلب بيقل وممكن يحصل عدم انتظام خطير أو إغماء.",
+          en: "Output falls and a dangerous rhythm or fainting can follow.",
+        },
+        fix: {
+          ar: "قلّل الأدرينالين وهدّي الموقف.",
+          en: "Lower the adrenaline and calm the situation.",
+        },
+      });
+    } else if (p.hr >= HR_TACHYCARDIA) {
+      out.push({
+        id: "tachy",
+        level: 1,
+        title: { ar: "تسرّع القلب", en: "Racing heart" },
+        cause: { ar: `النبض ${f(p.hr, 0)} bpm`, en: `${f(p.hr, 0)} bpm` },
+        consequence: {
+          ar: "القلب بيشتغل بجهد عالي وبتحس بخفقان وضيق.",
+          en: "The heart works very hard; you feel palpitations and tightness.",
+        },
+        fix: { ar: "قلّل الأدرينالين أو عالج السبب.", en: "Lower adrenaline or treat the cause." },
+      });
+    } else if (p.hr < 50) {
+      out.push({
+        id: "brady",
+        level: 2,
+        title: { ar: "بطء القلب الخطير", en: "Dangerously slow heart" },
+        cause: { ar: `النبض ${f(p.hr, 0)} bpm`, en: `${f(p.hr, 0)} bpm` },
+        consequence: {
+          ar: "القلب بيضعف من نقص الأكسجين والدم الواصل للمخ بيقل.",
+          en: "The heart is failing from lack of oxygen and the brain gets less blood.",
+        },
+        fix: { ar: "ارفع أكسجين الدم فوراً.", en: "Raise the blood oxygen immediately." },
+      });
+    }
+
+    if (v.oxygen < 80) {
+      out.push({
+        id: "hypoxia-severe",
+        level: 2,
+        title: { ar: "نقص أكسجين حاد", en: "Severe hypoxia" },
+        cause: {
+          ar: `تشبع الأكسجين ${f(v.oxygen, 0)}%`,
+          en: `Oxygen saturation ${f(v.oxygen, 0)}%`,
+        },
+        consequence: {
+          ar: "الأنسجة والمخ بيفقدوا الأكسجين وممكن يحصل إغماء وتلف.",
+          en: "Tissues and brain are starved of oxygen; fainting and damage can follow.",
+        },
+        fix: {
+          ar: "ارفع تشبع الأكسجين (تنفّس/أكسجين مساعد).",
+          en: "Restore oxygen (breathing support, supplemental oxygen).",
+        },
+      });
+    } else if (v.oxygen < 90) {
+      out.push({
+        id: "hypoxia",
+        level: 1,
+        title: { ar: "نقص أكسجين", en: "Low blood oxygen" },
+        cause: {
+          ar: `تشبع الأكسجين ${f(v.oxygen, 0)}%`,
+          en: `Oxygen saturation ${f(v.oxygen, 0)}%`,
+        },
+        consequence: {
+          ar: "القلب بيسرّع عشان يعوّض، والمخ بيتعب.",
+          en: "The heart speeds up to compensate and the brain tires.",
+        },
+        fix: { ar: "ارفع تشبع الأكسجين.", en: "Raise the oxygen saturation." },
+      });
+    }
+
+    if (v.glucose < 50) {
+      out.push({
+        id: "hypoglycemia-severe",
+        level: 2,
+        title: { ar: "هبوط حاد في السكر", en: "Severe hypoglycemia" },
+        cause: { ar: `الجلوكوز ${f(v.glucose, 0)} mg/dL`, en: `Glucose ${f(v.glucose, 0)} mg/dL` },
+        consequence: {
+          ar: "المخ بيفقد وقوده: ارتباك وتشنجات وإغماء.",
+          en: "The brain loses its fuel: confusion, seizures and fainting.",
+        },
+        fix: {
+          ar: "ارفع الجلوكوز (سكر سريع الامتصاص).",
+          en: "Raise the glucose (fast-acting sugar).",
+        },
+      });
+    } else if (v.glucose < 65) {
+      out.push({
+        id: "hypoglycemia",
+        level: 1,
+        title: { ar: "هبوط في السكر", en: "Low blood sugar" },
+        cause: { ar: `الجلوكوز ${f(v.glucose, 0)} mg/dL`, en: `Glucose ${f(v.glucose, 0)} mg/dL` },
+        consequence: {
+          ar: "رعشة ودوخة وتركيز ضعيف.",
+          en: "Shakiness, dizziness and poor concentration.",
+        },
+        fix: { ar: "ارفع الجلوكوز.", en: "Raise the glucose." },
+      });
+    } else if (v.glucose > 250) {
+      out.push({
+        id: "hyperglycemia",
+        level: 1,
+        title: { ar: "ارتفاع السكر", en: "High blood sugar" },
+        cause: { ar: `الجلوكوز ${f(v.glucose, 0)} mg/dL`, en: `Glucose ${f(v.glucose, 0)} mg/dL` },
+        consequence: {
+          ar: "عطش وتبوّل كتير وإرهاق، والمخ بيتأثر.",
+          en: "Thirst, frequent urination and fatigue; the brain is affected.",
+        },
+        fix: {
+          ar: "قلّل الجلوكوز لمستواه الطبيعي.",
+          en: "Bring the glucose back to its normal range.",
+        },
+      });
+    }
+
+    if (p.brain < 40) {
+      out.push({
+        id: "brain-failure",
+        level: 2,
+        title: { ar: "المخ شبه متوقف", en: "Brain response collapsing" },
+        cause: { ar: `استجابة المخ ${f(p.brain, 0)}%`, en: `Brain response ${f(p.brain, 0)}%` },
+        consequence: {
+          ar: "فقدان تركيز ووعي: الإغماء قريب.",
+          en: "Loss of focus and consciousness: fainting is close.",
+        },
+        fix: {
+          ar: "صحّح الأكسجين أو الجلوكوز أو تدفق الدم.",
+          en: "Correct the oxygen, glucose or blood flow.",
+        },
+      });
+    } else if (p.brain < 70) {
+      out.push({
+        id: "brain-weak",
+        level: 1,
+        title: { ar: "استجابة المخ ضعيفة", en: "Weak brain response" },
+        cause: { ar: `استجابة المخ ${f(p.brain, 0)}%`, en: `Brain response ${f(p.brain, 0)}%` },
+        consequence: {
+          ar: "تشوّش ودوخة وبطء في رد الفعل.",
+          en: "Confusion, dizziness and slow reactions.",
+        },
+        fix: { ar: "راجع الأكسجين والجلوكوز والتدفق.", en: "Check oxygen, glucose and flow." },
+      });
+    }
+
+    if (v.fault === 1) {
+      out.push({
+        id: "adrenaline-surge",
+        level: 1,
+        title: { ar: "نوبة أدرينالين", en: "Adrenaline surge" },
+        cause: {
+          ar: `الأدرينالين الفعلي ${f(p.surged, 0)}% بدل ${f(v.adrenaline, 0)}%`,
+          en: `Effective adrenaline ${f(p.surged, 0)}% instead of ${f(v.adrenaline, 0)}%`,
+        },
+        consequence: {
+          ar: "خفقان وعرق وقلق وضغط مرتفع.",
+          en: "Palpitations, sweating, anxiety and high blood pressure.",
+        },
+        fix: { ar: "هدّي الموقف أو شيل العطل.", en: "Calm the situation or clear the fault." },
+      });
+    }
+    if (v.fault === 2) {
+      out.push({
+        id: "narrow-artery",
+        level: 2,
+        title: { ar: "شريان المخ ضيّق", en: "Narrowed brain artery" },
+        cause: {
+          ar: `تدفق المخ ${f(p.brainFlow, 0)} مل/د بدل ${f(p.output * 150, 0)}`,
+          en: `Brain flow ${f(p.brainFlow, 0)} mL/min instead of ${f(p.output * 150, 0)}`,
+        },
+        consequence: {
+          ar: "المخ بياخد دم أقل فيضعف وخطر السكتة بيزيد.",
+          en: "The brain gets less blood, weakens, and stroke risk rises.",
+        },
+        fix: { ar: "عالج التضيّق (شيل العطل).", en: "Treat the narrowing (clear the fault)." },
+      });
+    }
+    if (v.fault === 3) {
+      out.push({
+        id: "beta-blocker",
+        level: 1,
+        title: { ar: "حاصرات بيتا شغالة", en: "Beta blocker active" },
+        cause: {
+          ar: `القلب بيستجيب بـ ${Math.round(BETA_BLOCK_FACTOR * 100)}% من الأدرينالين`,
+          en: `The heart responds at ${Math.round(BETA_BLOCK_FACTOR * 100)}% of the adrenaline`,
+        },
+        consequence: {
+          ar: "النبض مش بيزيد وقت الخطر زي الطبيعي.",
+          en: "The heart rate does not rise normally in danger.",
+        },
+        fix: { ar: "راجع جرعة الدواء مع الطبيب.", en: "Review the dose with a doctor." },
+      });
+    }
+
+    return out.sort(byLevel);
+  },
+  guided: [
+    {
+      id: "adrenaline-heart",
+      title: { ar: "الأدرينالين والقلب", en: "Adrenaline and the heart" },
+      task: {
+        ar: "ارفع الأدرينالين لـ 50% أو أكتر وراقب النبض.",
+        en: "Raise adrenaline to 50% or more and watch the heart rate.",
+      },
+      hint: { ar: "اسحب سلايدر الأدرينالين لليمين.", en: "Slide the adrenaline control up." },
+      explainIndex: 0,
+      focus: "adrenaline",
+      start: { adrenaline: 10, oxygen: 98, glucose: 90 },
+      done: (v) => v.adrenaline >= 50,
+    },
+    {
+      id: "oxygen",
+      title: { ar: "الأكسجين يهدّي القلب", en: "Oxygen calms the heart" },
+      task: {
+        ar: "ارفع أكسجين الدم لـ 97% أو أكتر وشوف القلب بيهدى والمخ بياخد كفايته.",
+        en: "Raise blood oxygen to 97% or more and watch the heart settle and the brain get enough.",
+      },
+      hint: { ar: "سلايدر أكسجين الدم.", en: "Use the blood oxygen slider." },
+      explainIndex: 1,
+      focus: "oxygen",
+      start: { adrenaline: 10, oxygen: 91, glucose: 90 },
+      done: (v) => v.oxygen >= 97,
+    },
+    {
+      id: "glucose",
+      title: { ar: "الجلوكوز وقود المخ", en: "Glucose is brain fuel" },
+      task: {
+        ar: "ارفع الجلوكوز لـ 90 mg/dL أو أكتر وراقب استجابة المخ ترجع كاملة.",
+        en: "Raise glucose to 90 mg/dL or more and watch the brain response recover.",
+      },
+      hint: { ar: "سلايدر جلوكوز الدم.", en: "Use the blood glucose slider." },
+      explainIndex: 1,
+      focus: "glucose",
+      start: { adrenaline: 10, oxygen: 98, glucose: 66 },
+      done: (v) => v.glucose >= 90,
+    },
+  ],
+  calc: (v, lang) => {
+    const ar = lang === "ar";
+    const p = computeAdrenaline(v.adrenaline, v.oxygen, v.glucose, v.fault);
+    return [
+      {
+        label: ar ? "الأدرينالين الفعلي" : "Effective adrenaline",
+        expr: `E = ${f(p.surged, 0)} %${v.fault === 1 ? (ar ? " (نوبة زائدة)" : " (surge)") : ""}`,
+      },
+      {
+        label: ar ? "معدل النبض" : "Heart rate",
+        expr: `HR = 60 + 105 × E^0.9${v.oxygen < 94 ? " + O₂" : ""} = ${f(p.hr, 0)} bpm`,
+      },
+      {
+        label: ar ? "الدم الخارج من القلب" : "Cardiac output",
+        expr: `CO = ${f(p.hr, 0)} × ${f(p.strokeVolume, 0)} ÷ 1000 = ${f(p.output)} L/min`,
+      },
+      {
+        label: ar ? "الواصل للمخ" : "Delivered to the brain",
+        expr: `${f(p.brainFlow, 0)} mL/min × (${f(v.oxygen, 0)}/98)³ → ${f(p.delivery * 100, 0)} %`,
+      },
+      {
+        label: ar ? "استجابة المخ" : "Brain response",
+        expr: `B = ${f(p.brain, 0)} %`,
+      },
+    ];
+  },
+  layers: [
+    ...commonLayers,
+    { id: "brain", label: { ar: "نشاط المخ", en: "Brain activity" }, default: true },
+    { id: "signals", label: { ar: "الإشارات الكيميائية", en: "Chemical signals" }, default: false },
+  ],
+};
 export const extras: Record<SimulationId, SimExtras> = {
   ohm: ohmExtras,
   "reaction-rate": chemExtras,
   diffusion: bioExtras,
+  adrenaline: adrenalineExtras,
 };
 
 export function defaultLayers(simId: SimulationId): Record<string, boolean> {

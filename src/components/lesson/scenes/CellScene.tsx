@@ -6,7 +6,7 @@ import { frac, rand, type SceneProps, useIntegrated } from "./sceneUtils";
 export function CellScene({ t, values, activity, labels, flow, layers, hazard }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { rate, leaky } = computeDiffusion(
+  const { rate, leaky, denatured } = computeDiffusion(
     values.temperature,
     values.gradient,
     values.permeability,
@@ -16,6 +16,8 @@ export function CellScene({ t, values, activity, labels, flow, layers, hazard }:
   const count = Math.round(6 + (values.gradient / 100) * 34);
   const cx = 300;
   const cy = 190;
+  // Hypertonic surroundings pull water out: the cell visibly shrinks (plasmolysis).
+  const shrink = values.fault === 2 ? 0.8 : 1;
 
   return (
     <svg
@@ -28,9 +30,9 @@ export function CellScene({ t, values, activity, labels, flow, layers, hazard }:
       <circle
         cx={cx}
         cy={cy}
-        r="120"
-        fill="var(--bio)"
-        fillOpacity="0.06"
+        r={120 * shrink}
+        fill={denatured ? "var(--destructive)" : "var(--bio)"}
+        fillOpacity={denatured ? 0.16 : 0.06}
         stroke={leaky ? "var(--destructive)" : "var(--bio)"}
         strokeWidth="5"
         strokeDasharray={leaky ? "10 22" : `${4 + values.permeability / 10} 6`}

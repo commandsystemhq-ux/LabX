@@ -14,8 +14,8 @@ src/components/
   noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML) و NoorSavedChats (قائمة المحادثات المحفوظة: فتح/حذف بتأكيد من نقرتين)
   brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
 src/data/
-  mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)
-  simulations.ts       نماذج رياضية نقية (computeOhm/Rate/Diffusion)، المتغيرات، القصة، الشرح، الأسئلة
+  mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)؛ `journeys` = رحلات «كن أنت» (تظهر في الشريط الجانبي تحت «رحلات الاستكشاف» وتفتح درساً)؛ لكل درس `simulationId` اختياري يتخطى محاكاة المادة (الأحياء: diffusion + adrenaline)
+  simulations.ts       نماذج رياضية نقية (computeOhm/Rate/Diffusion/Adrenaline)، المتغيرات، القصة، الشرح، الأسئلة
   simExtras.ts         الأعطال (faults 1–3 لكل محاكاة)، التحذيرات (hazards)، الخطوات الموجّهة، الحسابات، الطبقات (field/microscope/equilibrium + fieldInfo/microscopeInfo/leChatelier/lessonLayers)
   tutor.ts             كشف النية + بناء ردود المعلم من سياق الشاشة + buildIdleHint
   noor.ts              «نور» (المساعد العام): فهم الصفحة، نوايا المنصة (تحية/تنقّل/اقتراح/تقدم/دخول)، ردود محلية، وقائمة بيضاء لأزرار التنقل (parseActionTags) + lessonCatalog للـ AI
@@ -64,6 +64,8 @@ vite.config.ts         plugins صريحة (tanstackStart, nitro للـ build ف�
 | ألوان/animations                         | `styles.css`                                                                                                                                                                                                |
 | صفحة جديدة                               | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                                                                                          |
 | Three.js                                 | الـ TODO في `SimulationStage.tsx`؛ استبدال `scenes/` بنفس الـ props (`SceneProps`)                                                                                                                          |
+
+- رحلة «الأدرينالين والقلب» = محاكاة رابعة `adrenaline` (الأحياء، الدرسان `g12-biology-u4-l1/l2`): مفاتيح `adrenaline/oxygen/glucose` في `SimKey`، مخرجات النبض وتدفق الدم واستجابة المخ، أعطال (نوبة أدرينالين / تضيّق شريان المخ / حاصرات بيتا)، مشهدان `BodyScene` (الجسم) و`SignalScene` (الخلية). حالتها الحية تصل لنور عبر `sim.context` + `hazards` كأي محاكاة.
 
 ## 3. ملفات حساسة
 

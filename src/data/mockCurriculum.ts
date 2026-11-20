@@ -8,7 +8,7 @@ import type { SimKey } from "./simulations";
 
 export type GradeId = "g10" | "g11" | "g12";
 export type SubjectId = "biology" | "physics" | "chemistry";
-export type SimulationId = "ohm" | "reaction-rate" | "diffusion";
+export type SimulationId = "ohm" | "reaction-rate" | "diffusion" | "adrenaline";
 
 export interface Grade {
   id: GradeId;
@@ -110,19 +110,26 @@ const SIM: Record<SubjectId, SimulationId> = {
   chemistry: "reaction-rate",
 };
 
-type LessonSeed = [ar: string, en: string, minutes: number, preset?: SimPreset];
+type LessonSeed = [
+  ar: string,
+  en: string,
+  minutes: number,
+  preset?: SimPreset,
+  /** Overrides the subject's default simulation (e.g. the biology "Be you" journey). */
+  sim?: SimulationId,
+];
 type UnitSeed = { title: L10n; lessons: LessonSeed[] };
 
 function build(grade: GradeId, subject: SubjectId, units: UnitSeed[]): Unit[] {
   return units.map((u, ui) => ({
     id: `${grade}-${subject}-u${ui + 1}`,
     title: u.title,
-    lessons: u.lessons.map(([ar, en, minutes, preset], li) => ({
+    lessons: u.lessons.map(([ar, en, minutes, preset, sim], li) => ({
       id: `${grade}-${subject}-u${ui + 1}-l${li + 1}`,
       title: { ar, en },
       minutes,
       xp: minutes * 5,
-      simulationId: SIM[subject],
+      simulationId: sim ?? SIM[subject],
       ...(preset ? { preset } : {}),
     })),
   }));
@@ -387,6 +394,32 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
           ],
         ],
       },
+      {
+        title: {
+          ar: "كن أنت: رحلة الأدرينالين والقلب",
+          en: "Be You: The Adrenaline & Heart Journey",
+        },
+        lessons: [
+          [
+            "رحلة الأدرينالين والقلب",
+            "The adrenaline and heart journey",
+            25,
+            { values: { adrenaline: 10 }, layers: ["signals"] },
+            "adrenaline",
+          ],
+          [
+            "الأكسجين والجلوكوز ووقود المخ",
+            "Oxygen, glucose and brain fuel",
+            22,
+            {
+              values: { oxygen: 92, glucose: 75 },
+              view: "molecular",
+              layers: ["signals"],
+            },
+            "adrenaline",
+          ],
+        ],
+      },
     ]),
     physics: build("g12", "physics", [
       {
@@ -475,6 +508,31 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
     ]),
   },
 };
+
+/** An immersive "Be you" journey: opens its lesson and shows up in the sidebar. */
+export interface Journey {
+  id: string;
+  title: L10n;
+  tagline: L10n;
+  emoji: string;
+  subject: SubjectId;
+  /** The lesson (4-step loop) that runs the journey. */
+  lessonId: string;
+}
+
+export const journeys: Journey[] = [
+  {
+    id: "adrenaline-heart",
+    title: { ar: "رحلة الأدرينالين والقلب", en: "The adrenaline & heart journey" },
+    tagline: {
+      ar: "اركب جوه الدم: من القلب والأوعية للمخ",
+      en: "Ride inside the blood: heart, vessels and brain",
+    },
+    emoji: "❤️",
+    subject: "biology",
+    lessonId: "g12-biology-u4-l1",
+  },
+];
 
 export const DEFAULT_GRADE: GradeId = "g12";
 export const DEFAULT_SUBJECT: SubjectId = "physics";

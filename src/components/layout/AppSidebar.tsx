@@ -5,6 +5,7 @@ import {
   Compass,
   CookingPot,
   Home,
+  HeartPulse,
   LayoutDashboard,
   Menu,
   PanelLeft,
@@ -15,7 +16,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useNoorControl, useNoorLesson } from "@/components/noor/NoorProvider";
-import { DEFAULT_LESSON_ID } from "@/data/mockCurriculum";
+import { DEFAULT_LESSON_ID, journeys } from "@/data/mockCurriculum";
 import { useAuth } from "@/lib/auth";
 import { useLang, type UiKey } from "@/lib/i18n";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
@@ -74,10 +75,15 @@ const itemBase =
   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors";
 
 function AppSidebar({ pathname }: { pathname: string }) {
-  const { t } = useLang();
+  const { t, l } = useLang();
   const { user } = useAuth();
   const { setOpen: setNoorOpen } = useNoorControl();
   const { expanded, mobileOpen, isDesktop, toggle, closeMobile } = useSidebar();
+  const search = useRouterState({ select: (s) => s.location.search }) as Record<string, unknown>;
+  const lessonId = typeof search["id"] === "string" ? search["id"] : undefined;
+  /** A journey's lesson is highlighted under "Exploration journeys", not under "Simulations". */
+  const onJourney = isIn(pathname, "/lesson") && journeys.some((j) => j.lessonId === lessonId);
+  const isActive = (base: string) => isIn(pathname, base) && !(base === "/lesson" && onJourney);
 
   /** Text next to the icon; icons-only (but still announced) when collapsed on desktop. */
   const label = (key: UiKey) => <span className={expanded ? "" : "lg:sr-only"}>{t(key)}</span>;
@@ -91,10 +97,7 @@ function AppSidebar({ pathname }: { pathname: string }) {
     { to: "/dashboard", icon: LayoutDashboard, key: "sbCurriculum", base: "/dashboard" },
     { to: "/lesson", icon: Atom, key: "sbSimulations", base: "/lesson" },
   ];
-  const soon: { icon: LucideIcon; key: UiKey }[] = [
-    { icon: Compass, key: "sbJourneys" },
-    { icon: CookingPot, key: "sbKitchen" },
-  ];
+  const soon: { icon: LucideIcon; key: UiKey }[] = [{ icon: CookingPot, key: "sbKitchen" }];
 
   return (
     <>
@@ -161,8 +164,8 @@ function AppSidebar({ pathname }: { pathname: string }) {
                   <Link
                     {...(to === "/lesson" ? { to, search: { id: DEFAULT_LESSON_ID } } : { to })}
                     title={t(key)}
-                    aria-current={isIn(pathname, base) ? "page" : undefined}
-                    className={`${itemBase} ${center} ${state(isIn(pathname, base))}`}
+                    aria-current={isActive(base) ? "page" : undefined}
+                    className={`${itemBase} ${center} ${state(isActive(base))}`}
                   >
                     <Icon className="size-5 shrink-0" />
                     {label(key)}
@@ -189,6 +192,63 @@ function AppSidebar({ pathname }: { pathname: string }) {
                   </span>
                 </li>
               ))}
+            </ul>
+          </section>
+
+          <section aria-labelledby="sb-journeys">
+            <h2
+              id="sb-journeys"
+              className={
+                "mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wide text-muted-foreground " +
+                (expanded ? "" : "lg:sr-only")
+              }
+            >
+              {t("sbJourneys")}
+            </h2>
+            <ul className="space-y-1">
+              {journeys.map((j) => {
+                const active = onJourney && lessonId === j.lessonId;
+                return (
+                  <li key={j.id}>
+                    <Link
+                      to="/lesson"
+                      search={{ id: j.lessonId }}
+                      title={`${l(j.title)} — ${l(j.tagline)}`}
+                      aria-current={active ? "page" : undefined}
+                      className={`${itemBase} ${center} ${state(active)}`}
+                    >
+                      <HeartPulse className="size-5 shrink-0 text-destructive" />
+                      <span className={expanded ? "" : "lg:sr-only"}>{l(j.title)}</span>
+                      <span
+                        className={
+                          "ms-auto rounded-full bg-subject/15 px-2 py-0.5 text-[10px] font-semibold text-subject " +
+                          (expanded ? "" : "lg:hidden")
+                        }
+                      >
+                        {t("sbNew")}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+              <li>
+                <span
+                  aria-disabled="true"
+                  title={`${t("sbMoreJourneys")} — ${t("sbSoon")}`}
+                  className={`${itemBase} ${center} cursor-not-allowed text-muted-foreground/60`}
+                >
+                  <Compass className="size-5 shrink-0" />
+                  {label("sbMoreJourneys")}
+                  <span
+                    className={
+                      "ms-auto rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold " +
+                      (expanded ? "" : "lg:hidden")
+                    }
+                  >
+                    {t("sbSoon")}
+                  </span>
+                </span>
+              </li>
             </ul>
           </section>
 

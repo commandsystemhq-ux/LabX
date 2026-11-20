@@ -80,6 +80,10 @@ const safeTips: Record<SimulationDef["id"], { ar: string; en: string }> = {
     ar: "جرّب ترفع الحرارة فوق 50°C، أو فعّل وضع الأخطاء الواقعية وجرّب الغشاء التالف.",
     en: "Try going above 50°C, or enable Error Mode and try the damaged membrane.",
   },
+  adrenaline: {
+    ar: "جرّب ترفع الأدرينالين لأقصى حد، أو نزّل الجلوكوز تحت 50، أو فعّل وضع الأخطاء الواقعية وجرّب تضيّق شريان المخ.",
+    en: "Try pushing adrenaline to the maximum, dropping glucose below 50, or enable Error Mode and try the narrowed brain artery.",
+  },
 };
 
 function hazardLine(h: Hazard, lang: Lang) {

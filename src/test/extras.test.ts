@@ -10,7 +10,7 @@ import { buildComparison, demoValues } from "@/data/quizCompare";
 import { defaultsOf, simulations, type SimValues } from "@/data/simulations";
 import { initialQuiz, quizReducer } from "@/components/lesson/useQuiz";
 
-const ids = ["ohm", "reaction-rate", "diffusion"] as const;
+const ids = ["ohm", "reaction-rate", "diffusion", "adrenaline"] as const;
 const withValues = (id: (typeof ids)[number], patch: Partial<SimValues>): SimValues => ({
   ...defaultsOf(simulations[id]),
   ...patch,
@@ -28,6 +28,7 @@ describe("Hazards", () => {
       withValues("ohm", { voltage: 24, resistance: 2, temperature: 140, fault: 1 }),
       withValues("reaction-rate", { temperature: 99, concentration: 2, catalyst: 10, fault: 2 }),
       withValues("diffusion", { temperature: 55, fault: 1 }),
+      withValues("adrenaline", { adrenaline: 100, oxygen: 70, glucose: 40, fault: 1 }),
     ];
     ids.forEach((id, i) => {
       const hazards = extras[id].hazards(risky[i]!);
@@ -153,6 +154,12 @@ describe("Layers and subject extras", () => {
       "flow",
       "energy",
       "equilibrium",
+    ]);
+    expect(Object.keys(defaultLayers("adrenaline"))).toEqual([
+      "labels",
+      "flow",
+      "brain",
+      "signals",
     ]);
   });
 
