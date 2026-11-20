@@ -78,6 +78,39 @@ $$;
 revoke all on function public.ai_record_usage(text, boolean) from public, anon, authenticated;
 grant execute on function public.ai_record_usage(text, boolean) to service_role;
 
+-- ---------------------------------------------------------------------------------------------
+-- Noor chat memory: one conversation per account (the app keeps at most 60 short messages).
+-- Strict RLS: owner only, no anonymous access, no delete (clearing a chat overwrites the row).
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists public.noor_conversations (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  messages jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  constraint noor_conversations_is_array check (jsonb_typeof(messages) = 'array'),
+  constraint noor_conversations_size check (pg_column_size(messages) <= 262144)
+);
+
+alter table public.noor_conversations enable row level security;
+
+revoke all on public.noor_conversations from anon;
+grant select, insert, update on public.noor_conversations to authenticated;
+
+drop policy if exists "noor_chat_select_own" on public.noor_conversations;
+create policy "noor_chat_select_own" on public.noor_conversations
+  for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "noor_chat_insert_own" on public.noor_conversations;
+create policy "noor_chat_insert_own" on public.noor_conversations
+  for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "noor_chat_update_own" on public.noor_conversations;
+create policy "noor_chat_update_own" on public.noor_conversations
+  for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 -- Make ONE account the admin (run once, with your own email). app_metadata can only be changed by
 -- the service role / SQL editor, never by the user, so it is safe to base authorisation on.
 --   update auth.users

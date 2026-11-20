@@ -172,14 +172,7 @@ export const ui = {
   noorSubtitleLesson: { ar: "فاهم المشهد اللي قدامك", en: "Sees the scene in front of you" },
   noorSubtitlePlatform: { ar: "مساعدك الذكي في LabX", en: "Your smart guide in LabX" },
   noorYouAreHere: { ar: "إنت دلوقتي في", en: "You are on" },
-  noorAdminAiError: {
-    ar: "للأدمن فقط: فشل الاتصال بمزوّد الـ AI فاستخدمت رداً محلياً. افتح لوحة الإدارة واضغط «اختبار الاتصال» لتعرف السبب.",
-    en: "Admin only: the AI provider call failed, so this is a local reply. Open the admin panel and press “Test connection” to see why.",
-  },
-  noorAdminAiOff: {
-    ar: "للأدمن فقط: الـ AI متوقف أو غير مُعدّ من لوحة الإدارة، فده رد محلي.",
-    en: "Admin only: the AI is off or not configured in the admin panel, so this is a local reply.",
-  },
+  noorNewChat: { ar: "محادثة جديدة", en: "New chat" },
   adminTest: { ar: "اختبار الاتصال", en: "Test connection" },
   adminTesting: { ar: "جاري الاختبار…", en: "Testing…" },
   adminTestOk: { ar: "المزوّد شغّال ✅", en: "Provider works ✅" },
@@ -196,7 +189,6 @@ export const ui = {
   idleAsk: { ar: "اسأل المعلم", en: "Ask the tutor" },
   idleSnooze: { ar: "ذكّرني بعد شوية", en: "Remind me later" },
   idleDismiss: { ar: "إخفاء التلميحات في الدرس ده", en: "Hide hints for this lesson" },
-  aiPowered: { ar: "رد مدعوم بالذكاء الاصطناعي", en: "AI-powered reply" },
   adminLink: { ar: "لوحة الإدارة", en: "Admin" },
   adminTitle: { ar: "إدارة نور (المساعد الذكي)", en: "Noor (AI assistant) administration" },
   adminSubtitle: {

@@ -11,7 +11,7 @@ src/components/
   dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
   lesson/              مساحة الدرس بالكامل (انظر §4)
     scenes/            مشاهد SVG لكل محاكاة × منظور (macro/molecular) — مكان Three.js مستقبلاً
-  noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root)
+  noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML)
   brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
 src/data/
   mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)
@@ -29,9 +29,10 @@ src/lib/
   use-progress.ts      hooks (useProgress/useMastery/useStudentStats) — use-is-client.ts للـ hydration
   ai-config.ts         (مشترك) schemas zod + أنواع إعدادات الـ AI؛ لا أسرار ولا I/O
   ai-tutor.functions.ts  server functions الوحيدة (askAiTutorFn/adminGet/adminSave) — تستورد ai/*.server.ts ديناميكياً داخل الـ handler
-  ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً
+  ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً؛ يرسل آخر الرسائل + تلخيصاً للأقدم
+  noor-chat.ts, use-noor-chat.ts   ذاكرة محادثة نور: localStorage (مفتاح لكل حساب + ضيف) + صف `noor_conversations` للمسجَّل (RLS)، sanitize لكل ما يُقرأ، chatContext (آخر 8 رسائل + ملخص ≤1000 حرف)
   ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، sigv4 (توقيع AWS SigV4)، providers (Bedrock: API key أو IAM، Azure: max_completion_tokens مع fallback)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
-supabase/schema.sql    جدول user_progress + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
+supabase/schema.sql    جدول user_progress + noor_conversations (RLS للمالك فقط) + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
 .env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
   error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
 src/server.ts, start.ts   مدخل السيرفر ووسيط الأخطاء/CSRF
@@ -116,4 +117,4 @@ auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSu
 - نشاط الأسبوع تقدير من وقت آخر تحديث لكل درس (لا يوجد تتبع زمن فعلي).
 - «نور» لا تتنقل بنفسها: الردود (المحلية أو من الـ AI) قد تحمل أزرار تنقل فقط، من قائمة بيضاء (`home` / `dashboard` / `lesson` بمعرّف موجود فعلاً / `auth`)، والطالب هو من يضغط. وسوم `[[go:…]]` القادمة من الـ AI تُتحقَّق وتُحذف من النص. أي نوع إجراء جديد يُضاف في `data/noor.ts` مع تحقق.
 - فشل المزوّد لا يُعرض للطالب أبداً؛ الأدمن يرى السبب الحقيقي (منقّحاً من المفتاح) من زر «اختبار الاتصال» في `/admin` ومن لوغ السيرفر.
-- الـ LLM يُستدعى من السيرفر فقط ولمستخدم مسجَّل فقط (الضيف يأخذ الردود المحلية)؛ Bedrock عبر Bedrock API key (Bearer) أو IAM credentials بتوقيع SigV4 (مسار `/converse` أو `/invoke`، والـ Model ID قد يكون id مباشراً أو Inference Profile أو ARN)؛ إعدادات التوليد (tokens/temperature/timeout/تعليمات نور) تُخزَّن مشفّرة مع كل مزوّد، وTemperature اختيارية (فارغة = لا تُرسل) وBedrock يعيد المحاولة تلقائياً بدونها مرة واحدة إذا رفضها الموديل (deprecated/not supported) ويتذكّر ذلك في الذاكرة؛ الـ rate limit في ذاكرة السيرفر (best-effort عند تعدد النسخ)؛ كل سؤال مستقل (بدون سجل محادثة).
+- الـ LLM يُستدعى من السيرفر فقط ولمستخدم مسجَّل فقط (الضيف يأخذ الردود المحلية)؛ Bedrock عبر Bedrock API key (Bearer) أو IAM credentials بتوقيع SigV4 (مسار `/converse` أو `/invoke`، والـ Model ID قد يكون id مباشراً أو Inference Profile أو ARN)؛ إعدادات التوليد (tokens/temperature/timeout/تعليمات نور) تُخزَّن مشفّرة مع كل مزوّد، وTemperature اختيارية (فارغة = لا تُرسل) وBedrock يعيد المحاولة تلقائياً بدونها مرة واحدة إذا رفضها الموديل (deprecated/not supported) ويتذكّر ذلك في الذاكرة؛ الـ rate limit في ذاكرة السيرفر (best-effort عند تعدد النسخ)؛ ذاكرة المحادثة تُمرَّر كبيانات غير موثوقة داخل وسوم `<conversation_*>` (لا كأدوار assistant) حتى لا تُزوَّر؛ زر «محادثة جديدة» يمسح السجل المحلي والبعيد، وجدول `noor_conversations` يُنشأ يدوياً من `supabase/schema.sql` (بدونه تعمل الذاكرة محلياً فقط).

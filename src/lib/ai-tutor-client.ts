@@ -3,7 +3,10 @@ import type { NoorPage } from "@/data/noor";
 import type { SimulationDef } from "@/data/simulations";
 import type { TutorContext } from "@/data/tutor";
 import {
+  MAX_HISTORY_TURNS,
   MAX_QUESTION,
+  MAX_SUMMARY_CHARS,
+  MAX_TURN_CHARS,
   type AskTutorInput,
   type AskTutorResult,
   type TUTOR_INTENTS,
@@ -37,6 +40,10 @@ export interface AiReplyParams {
   };
   /** Present only inside a lesson. */
   lesson?: { sim: SimulationDef; ctx: TutorContext } | null | undefined;
+  /** Earlier turns of this chat (before `question`), so Noor remembers the conversation. */
+  history?: { role: "student" | "noor"; text: string }[] | undefined;
+  /** Digest of the turns older than `history`. */
+  summary?: string | undefined;
   /** Called with the reason whenever no AI text is returned. */
   onFallback?: ((reason: FallbackReason) => void) | undefined;
   /** Injected in tests. */
@@ -65,6 +72,14 @@ export async function requestAiReply(p: AiReplyParams): Promise<string | null> {
   const data: AskTutorInput = {
     accessToken: p.accessToken,
     question: p.question.slice(0, MAX_QUESTION),
+    ...(p.history?.length
+      ? {
+          history: p.history
+            .slice(-MAX_HISTORY_TURNS)
+            .map((m) => ({ role: m.role, text: m.text.slice(0, MAX_TURN_CHARS) })),
+        }
+      : {}),
+    ...(p.summary ? { summary: p.summary.slice(0, MAX_SUMMARY_CHARS) } : {}),
     intent: p.intent,
     lang: p.lang,
     page: p.page.page,

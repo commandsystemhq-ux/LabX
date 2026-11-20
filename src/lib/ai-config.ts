@@ -10,6 +10,10 @@ export type AiProvider = (typeof AI_PROVIDERS)[number];
 
 export const DEFAULT_AZURE_API_VERSION = "2024-10-21";
 export const MAX_QUESTION = 300;
+/** Conversation memory sent with a question: latest turns verbatim + a digest of older ones. */
+export const MAX_HISTORY_TURNS = 8;
+export const MAX_TURN_CHARS = 600;
+export const MAX_SUMMARY_CHARS = 1000;
 
 const REGION_RE = /^[a-z]{2}(?:-[a-z]+)+-\d{1,2}$/;
 const BEDROCK_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,199}$/;
@@ -237,6 +241,11 @@ export type NoorPageId = (typeof NOOR_PAGES)[number];
 export const askTutorInput = z.object({
   accessToken,
   question: z.string().trim().min(1).max(MAX_QUESTION),
+  history: z
+    .array(z.object({ role: z.enum(["student", "noor"]), text: z.string().max(MAX_TURN_CHARS) }))
+    .max(MAX_HISTORY_TURNS)
+    .optional(),
+  summary: z.string().max(MAX_SUMMARY_CHARS).optional(),
   intent: z.enum(TUTOR_INTENTS),
   lang: z.enum(["ar", "en"]),
   page: z.enum(NOOR_PAGES),

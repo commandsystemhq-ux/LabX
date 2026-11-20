@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Bot, ChevronDown, MapPin, Send, Settings2, Sparkles } from "lucide-react";
+import { Bot, ChevronDown, MapPin, MessageSquarePlus, Send, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { extras, hazardLevel } from "@/data/simExtras";
 import { findLesson, isGradeId, isSubjectId, lessonExists } from "@/data/mockCurriculum";
@@ -19,24 +19,15 @@ import {
 } from "@/data/noor";
 import type { TutorIntent } from "@/data/simulations";
 import { buildTutorReply, detectIntent, MAX_QUESTION_LENGTH } from "@/data/tutor";
-import { requestAiReply, type FallbackReason } from "@/lib/ai-tutor-client";
+import { requestAiReply } from "@/lib/ai-tutor-client";
 import { useAuth } from "@/lib/auth";
 import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
+import { chatContext } from "@/lib/noor-chat";
 import { studentStats } from "@/lib/progress";
+import { useNoorChat } from "@/lib/use-noor-chat";
 import { useProgress } from "@/lib/use-progress";
+import { NoorMarkdown } from "./NoorMarkdown";
 import { useNoorControl, useNoorLesson, useNoorOpen } from "./NoorProvider";
-
-interface Message {
-  id: number;
-  role: "noor" | "student";
-  text: string;
-  /** Produced by the server-side AI (vs. the built-in local answers). */
-  ai?: boolean;
-  /** Validated "go to" buttons; the student has to click, Noor never navigates by itself. */
-  actions?: NoorAction[];
-  /** Shown to the admin only: why the AI wasn't used. */
-  note?: "error" | "disabled";
-}
 
 const lessonPrompts: { intent: TutorIntent; label: L10n }[] = [
   { intent: "colloquial", label: { ar: "اشرحلي بالعامية", en: "Explain it simply" } },
@@ -123,23 +114,24 @@ export function NoorAssistant() {
     };
   }, [progress]);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const chat = useNoorChat();
+  const { messages } = chat;
   const [typing, setTyping] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const idRef = useRef(1);
   const timer = useRef<number | undefined>(undefined);
   const runRef = useRef(0);
 
   // Latest state, read when a (possibly delayed) reply is produced.
-  const live = useRef({ lang, lesson, platform, stats, progress, isAdmin: false });
-  live.current = { lang, lesson, platform, stats, progress, isAdmin: user?.isAdmin === true };
+  const live = useRef({ lang, lesson, platform, stats, progress });
+  live.current = { lang, lesson, platform, stats, progress };
 
+  // A different account (or sign-out) must not receive a reply that was still in flight.
   useEffect(() => {
-    const greeting: Message = { id: 0, role: "noor", text: noorGreeting(lang) };
-    // Keep the conversation when the language flips; only the greeting is re-localised.
-    setMessages((m) => (m.length === 0 ? [greeting] : [greeting, ...m.slice(1)]));
-  }, [lang]);
+    runRef.current++;
+    window.clearTimeout(timer.current);
+    setTyping(false);
+  }, [chat.scope]);
 
   useEffect(
     () => () => {
@@ -155,7 +147,8 @@ export function NoorAssistant() {
 
   const send = (text: string, hint?: { platform?: PlatformIntent; lesson?: TutorIntent }) => {
     if (typing) return;
-    setMessages((m) => [...m, { id: idRef.current++, role: "student", text }]);
+    const memory = chatContext(chat.messagesRef.current);
+    chat.append({ role: "student", text });
     setTyping(true);
     const run = ++runRef.current;
     const started = Date.now();
@@ -164,14 +157,12 @@ export function NoorAssistant() {
       const snap = live.current;
       const platformIntent = hint?.platform ?? (hint?.lesson ? null : detectPlatformIntent(text));
       let reply: { text: string; actions: NoorAction[] };
-      let ai = false;
-      let note: Message["note"];
+      let aiAnswered = false;
 
       if (platformIntent) {
         reply = buildPlatformReply(platformIntent, text, snap.platform, snap.stats, snap.progress);
       } else {
         const lessonIntent = hint?.lesson ?? detectIntent(text);
-        const why: { reason: FallbackReason | null } = { reason: null };
         const accessToken = user ? await getAccessToken() : null;
         const aiText = await requestAiReply({
           question: text,
@@ -185,12 +176,13 @@ export function NoorAssistant() {
             scene: describePage(snap.platform),
           },
           lesson: snap.lesson ? { sim: snap.lesson.sim, ctx: snap.lesson.ctx } : null,
-          onFallback: (r) => void (why.reason = r),
+          history: memory.history,
+          summary: memory.summary,
         });
 
         if (aiText) {
           reply = parseActionTags(aiText);
-          ai = true;
+          aiAnswered = true;
         } else {
           reply = snap.lesson
             ? {
@@ -198,34 +190,33 @@ export function NoorAssistant() {
                 actions: [],
               }
             : buildPlatformReply("unknown", text, snap.platform, snap.stats, snap.progress);
-          if (snap.isAdmin) {
-            note =
-              why.reason === "disabled" ? "disabled" : why.reason === "error" ? "error" : undefined;
-          }
         }
       }
       if (run !== runRef.current) return;
 
       const deliver = () => {
         if (run !== runRef.current) return;
-        setMessages((m) => [
-          ...m,
-          {
-            id: idRef.current++,
-            role: "noor",
-            text: reply.text,
-            ai,
-            ...(reply.actions.length ? { actions: reply.actions } : {}),
-            ...(note ? { note } : {}),
-          },
-        ]);
+        chat.append({
+          role: "noor",
+          text: reply.text,
+          ...(reply.actions.length ? { actions: reply.actions } : {}),
+        });
         setTyping(false);
       };
       timer.current = window.setTimeout(
         deliver,
-        ai ? 0 : Math.max(0, 600 - (Date.now() - started)),
+        aiAnswered ? 0 : Math.max(0, 600 - (Date.now() - started)),
       );
     })();
+  };
+
+  /** Starts a fresh conversation: drops any reply still in flight and clears the saved history. */
+  const newChat = () => {
+    runRef.current++;
+    window.clearTimeout(timer.current);
+    setTyping(false);
+    chat.clear();
+    setInput("");
   };
 
   const submit = (e: FormEvent) => {
@@ -305,6 +296,17 @@ export function NoorAssistant() {
           </div>
           <button
             type="button"
+            onClick={newChat}
+            disabled={messages.length === 0 && !typing}
+            title={t("noorNewChat")}
+            aria-label={t("noorNewChat")}
+            className="flex items-center gap-1 rounded-xl border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <MessageSquarePlus className="size-3.5" />
+            {t("noorNewChat")}
+          </button>
+          <button
+            type="button"
             onClick={() => setOpen(false)}
             aria-label="Close"
             className="rounded-xl p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -343,34 +345,32 @@ export function NoorAssistant() {
         </div>
 
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-          {messages.map((m) => (
+          <div className="flex flex-col items-start gap-1.5">
+            <div className="max-w-[85%] rounded-2xl rounded-es-md border border-border bg-background/60 px-3.5 py-2.5 text-sm leading-relaxed">
+              <NoorMarkdown text={noorGreeting(lang)} />
+            </div>
+          </div>
+          {messages.map((m, i) => (
             <div
-              key={m.id}
+              key={i}
               className={
                 "flex flex-col gap-1.5 " + (m.role === "student" ? "items-end" : "items-start")
               }
             >
-              <p
-                className={
-                  "max-w-[85%] whitespace-pre-line break-words rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed " +
-                  (m.role === "student"
-                    ? "rounded-ee-md bg-subject text-primary-foreground"
-                    : "rounded-es-md border border-border bg-background/60")
-                }
-              >
-                {m.text}
-                {m.ai && (
-                  <span className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Sparkles className="size-3 text-subject" />
-                    {t("aiPowered")}
-                  </span>
-                )}
-              </p>
+              {m.role === "student" ? (
+                <p className="max-w-[85%] whitespace-pre-line break-words rounded-2xl rounded-ee-md bg-subject px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
+                  {m.text}
+                </p>
+              ) : (
+                <div className="max-w-[85%] rounded-2xl rounded-es-md border border-border bg-background/60 px-3.5 py-2.5 text-sm leading-relaxed">
+                  <NoorMarkdown text={m.text} />
+                </div>
+              )}
               {m.actions && (
                 <div className="flex max-w-[92%] flex-wrap gap-1.5">
-                  {m.actions.map((a, i) => (
+                  {m.actions.map((a, j) => (
                     <button
-                      key={i}
+                      key={j}
                       type="button"
                       onClick={() => go(a)}
                       className="rounded-full border border-subject/40 bg-subject/10 px-3 py-1.5 text-xs font-semibold text-subject transition hover:bg-subject/20"
@@ -379,12 +379,6 @@ export function NoorAssistant() {
                     </button>
                   ))}
                 </div>
-              )}
-              {m.note && (
-                <p className="flex max-w-[85%] items-start gap-1.5 rounded-xl border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[11px]">
-                  <Settings2 className="mt-0.5 size-3 shrink-0 text-warning" />
-                  {t(m.note === "error" ? "noorAdminAiError" : "noorAdminAiOff")}
-                </p>
               )}
             </div>
           ))}
