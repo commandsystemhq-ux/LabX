@@ -186,3 +186,158 @@ export function pickNewer(local: ChatSnapshot | null, remote: ChatSnapshot | nul
   if (!remote) return local;
   return local.updatedAt > remote.updatedAt ? local : remote;
 }
+
+/* ------------------------------------------------------------------------------------------ */
+/* Saved conversations: saved by hand with "Save chat", listed, reopened or deleted.          */
+/* Signed-in: one `noor_saved_chats` row each (RLS: owner only). Guests: localStorage, which   */
+/* is also the fallback when the account table isn't reachable.                               */
+/* ------------------------------------------------------------------------------------------ */
+
+export const MAX_SAVED_CHATS = 30;
+const MAX_TITLE = 80;
+const SHORT_TITLE = 48;
+const SAVED_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+
+export interface SavedChat {
+  id: string;
+  title: string;
+  savedAt: number;
+  messages: StoredMessage[];
+}
+
+/** Ids created on this device (the account's rows use database uuids). */
+export const isLocalSavedId = (id: string) => id.startsWith("l-");
+export const newLocalSavedId = () =>
+  `l-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+/** Short automatic title: the student's first question, flattened and cut at a word boundary. */
+export function makeChatTitle(messages: StoredMessage[], fallback: string): string {
+  const first = (messages.find((m) => m.role === "student") ?? messages[0])?.text ?? "";
+  const flat = first
+    .replace(/[*_`#>[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!flat) return fallback;
+  if (flat.length <= SHORT_TITLE) return flat;
+  const cut = flat.slice(0, SHORT_TITLE);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > SHORT_TITLE / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/** Everything read from storage or the database is untrusted: ids, titles and messages are rebuilt. */
+export function sanitizeSaved(raw: unknown): SavedChat[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: SavedChat[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const { id, title, savedAt, messages } = item as Record<string, unknown>;
+    if (typeof id !== "string" || !SAVED_ID_RE.test(id) || seen.has(id)) continue;
+    const clean = sanitizeChat(messages);
+    if (clean.length === 0) continue;
+    const name = (typeof title === "string" ? title : "").replace(/\s+/g, " ").trim();
+    seen.add(id);
+    out.push({
+      id,
+      title: name.slice(0, MAX_TITLE) || makeChatTitle(clean, "—"),
+      savedAt: typeof savedAt === "number" && Number.isFinite(savedAt) ? savedAt : 0,
+      messages: clean,
+    });
+  }
+  return out.sort((a, b) => b.savedAt - a.savedAt).slice(0, MAX_SAVED_CHATS);
+}
+
+export const savedKey = (userId: string | null) => `labx.noor.saved.v1:${userId ?? "guest"}`;
+
+export function loadLocalSaved(userId: string | null, store: Storage | null = storage()) {
+  try {
+    const raw = store?.getItem(savedKey(userId));
+    return raw ? sanitizeSaved((JSON.parse(raw) as { chats?: unknown } | null)?.chats) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** False when the browser refused the write (storage full or blocked). */
+export function saveLocalSaved(
+  userId: string | null,
+  chats: SavedChat[],
+  store: Storage | null = storage(),
+) {
+  try {
+    if (!store) return false;
+    if (chats.length === 0) store.removeItem(savedKey(userId));
+    else store.setItem(savedKey(userId), JSON.stringify({ chats }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The account's saved chats, or null when the table can't be read (not created yet, offline). */
+export async function fetchRemoteSaved(
+  client: SupabaseClient,
+  userId: string,
+): Promise<SavedChat[] | null> {
+  try {
+    const { data, error } = await client
+      .from("noor_saved_chats")
+      .select("id, title, messages, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_SAVED_CHATS);
+    if (error || !Array.isArray(data)) return null;
+    return sanitizeSaved(
+      data.map((r: Record<string, unknown>) => ({
+        id: r["id"],
+        title: r["title"],
+        messages: r["messages"],
+        savedAt: typeof r["created_at"] === "string" ? Date.parse(r["created_at"]) : 0,
+      })),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** "limit" = the row-level policy refused (too many saved chats); null = unreachable. */
+export async function insertRemoteSaved(
+  client: SupabaseClient,
+  userId: string,
+  title: string,
+  messages: StoredMessage[],
+): Promise<SavedChat | "limit" | null> {
+  try {
+    const { data, error } = await client
+      .from("noor_saved_chats")
+      .insert({ user_id: userId, title, messages })
+      .select("id, created_at")
+      .single();
+    if (error) return error.code === "42501" ? "limit" : null;
+    const row = data as { id?: unknown; created_at?: unknown };
+    const [saved] = sanitizeSaved([
+      {
+        id: row.id,
+        title,
+        messages,
+        savedAt: typeof row.created_at === "string" ? Date.parse(row.created_at) : Date.now(),
+      },
+    ]);
+    return saved ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteRemoteSaved(client: SupabaseClient, userId: string, id: string) {
+  try {
+    const { error } = await client
+      .from("noor_saved_chats")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId);
+    return !error;
+  } catch {
+    return false;
+  }
+}

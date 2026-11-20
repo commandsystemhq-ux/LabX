@@ -111,6 +111,49 @@ create policy "noor_chat_update_own" on public.noor_conversations
   for update to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
+
+-- ---------------------------------------------------------------------------------------------
+-- Noor saved chats: conversations the student saved by hand ("Save chat"), up to 30 each.
+-- Strict RLS: owner only, no anonymous access, no update (a saved chat is a snapshot).
+-- ---------------------------------------------------------------------------------------------
+
+create table if not exists public.noor_saved_chats (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  messages jsonb not null,
+  created_at timestamptz not null default now(),
+  constraint noor_saved_chats_title_len check (char_length(title) between 1 and 80),
+  constraint noor_saved_chats_is_array check (jsonb_typeof(messages) = 'array'),
+  constraint noor_saved_chats_size check (pg_column_size(messages) <= 524288)
+);
+
+create index if not exists noor_saved_chats_user_idx
+  on public.noor_saved_chats (user_id, created_at desc);
+
+alter table public.noor_saved_chats enable row level security;
+
+revoke all on public.noor_saved_chats from anon;
+grant select, insert, delete on public.noor_saved_chats to authenticated;
+
+drop policy if exists "noor_saved_select_own" on public.noor_saved_chats;
+create policy "noor_saved_select_own" on public.noor_saved_chats
+  for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "noor_saved_insert_own" on public.noor_saved_chats;
+create policy "noor_saved_insert_own" on public.noor_saved_chats
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and (select count(*) from public.noor_saved_chats c where c.user_id = (select auth.uid())) < 30
+  );
+
+drop policy if exists "noor_saved_delete_own" on public.noor_saved_chats;
+create policy "noor_saved_delete_own" on public.noor_saved_chats
+  for delete to authenticated
+  using ((select auth.uid()) = user_id);
+
 -- Make ONE account the admin (run once, with your own email). app_metadata can only be changed by
 -- the service role / SQL editor, never by the user, so it is safe to base authorisation on.
 --   update auth.users

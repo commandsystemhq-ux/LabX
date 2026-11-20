@@ -11,7 +11,7 @@ src/components/
   dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
   lesson/              مساحة الدرس بالكامل (انظر §4)
     scenes/            مشاهد SVG لكل محاكاة × منظور (macro/molecular) — مكان Three.js مستقبلاً
-  noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML)
+  noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML) و NoorSavedChats (قائمة المحادثات المحفوظة: فتح/حذف بتأكيد من نقرتين)
   brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
 src/data/
   mockCurriculum.ts    شجرة الصف ← المادة ← الوحدة ← الدرس + دوال البحث (findLesson, getNextLesson)
@@ -30,9 +30,9 @@ src/lib/
   ai-config.ts         (مشترك) schemas zod + أنواع إعدادات الـ AI؛ لا أسرار ولا I/O
   ai-tutor.functions.ts  server functions الوحيدة (askAiTutorFn/adminGet/adminSave) — تستورد ai/*.server.ts ديناميكياً داخل الـ handler
   ai-tutor-client.ts   requestAiReply: يرجع نصاً أو null (= ردّ محلي) ولا يرمي أبداً؛ يرسل آخر الرسائل + تلخيصاً للأقدم
-  noor-chat.ts, use-noor-chat.ts   ذاكرة محادثة نور: localStorage (مفتاح لكل حساب + ضيف) + صف `noor_conversations` للمسجَّل (RLS)، sanitize لكل ما يُقرأ، chatContext (آخر 8 رسائل + ملخص ≤1000 حرف)
+  noor-chat.ts, use-noor-chat.ts   ذاكرة محادثة نور: localStorage (مفتاح لكل حساب + ضيف) + صف `noor_conversations` للمسجَّل (RLS)، sanitize لكل ما يُقرأ، chatContext (آخر 8 رسائل + ملخص ≤1000 حرف)؛ «حفظ المحادثة» يدوي فقط (useSavedChats): عنوان تلقائي من أول سؤال، حتى 30 محادثة، صف `noor_saved_chats` للمسجَّل (RLS للمالك، بلا update) و localStorage للزائر وكاحتياط إن تعذّر الجدول
   ai/*.server.ts       سيرفر فقط: crypto (AES-GCM)، sigv4 (توقيع AWS SigV4)، providers (Bedrock: API key أو IAM، Azure: max_completion_tokens مع fallback)، service (منطق + حارس admin + rate limit)، store (Supabase بمفتاح service-role)
-supabase/schema.sql    جدول user_progress + noor_conversations (RLS للمالك فقط) + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
+supabase/schema.sql    جدول user_progress + noor_conversations + noor_saved_chats (RLS للمالك فقط) + ai_settings/ai_usage (بدون policies؛ service-role فقط) + سياسات RLS (يُشغَّل يدوياً في Supabase)
 .env.example           أسماء المتغيرات فقط (لا قيم حقيقية)
   error-capture.ts, error-page.ts   حماية SSR (تُستخدم من server.ts/start.ts)
 src/server.ts, start.ts   مدخل السيرفر ووسيط الأخطاء/CSRF

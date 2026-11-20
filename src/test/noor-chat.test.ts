@@ -7,9 +7,14 @@ import {
   chatContext,
   chatKey,
   loadLocalChat,
+  loadLocalSaved,
+  makeChatTitle,
+  MAX_SAVED_CHATS,
   pickNewer,
   sanitizeChat,
+  sanitizeSaved,
   saveLocalChat,
+  saveLocalSaved,
   type StoredMessage,
 } from "@/lib/noor-chat";
 
@@ -145,5 +150,60 @@ describe("Noor conversation memory", () => {
     expect(
       askTutorInput.safeParse({ ...base, history: [{ role: "system", text: "x" }] }).success,
     ).toBe(false);
+  });
+});
+
+describe("Noor saved chats", () => {
+  const chat = (n: number): StoredMessage[] => [
+    { role: "student", text: `سؤال ${n}` },
+    { role: "noor", text: "رد" },
+  ];
+
+  it("makes a short automatic title from the first question", () => {
+    expect(makeChatTitle(chat(1), "x")).toBe("سؤال 1");
+    expect(makeChatTitle([{ role: "noor", text: "## **مرحبا**" }], "x")).toBe("مرحبا");
+    const long = makeChatTitle(
+      [{ role: "student", text: "ايه الفرق بين التيار والجهد في الدوائر الكهربائية المعقدة جدا؟" }],
+      "x",
+    );
+    expect(long.length).toBeLessThanOrEqual(49);
+    expect(long.endsWith("…")).toBe(true);
+    expect(makeChatTitle([], "محادثة بدون عنوان")).toBe("محادثة بدون عنوان");
+  });
+
+  it("rebuilds saved chats from untrusted data", () => {
+    const ok = { id: "l-abc1", title: " عنوان ", savedAt: 5, messages: chat(1) };
+    const out = sanitizeSaved([
+      ok,
+      { ...ok }, // duplicate id
+      { ...ok, id: "../etc" },
+      { ...ok, id: "l-x", messages: [] },
+      { ...ok, id: "l-y", title: 5, savedAt: "no" },
+      "junk",
+    ]);
+    expect(out.map((c) => c.id).sort()).toEqual(["l-abc1", "l-y"]);
+    expect(out.find((c) => c.id === "l-abc1")?.title).toBe("عنوان");
+    expect(out.find((c) => c.id === "l-y")).toMatchObject({ title: "سؤال 1", savedAt: 0 });
+    const many = Array.from({ length: 50 }, (_, i) => ({ ...ok, id: `l-${i}`, savedAt: i }));
+    expect(sanitizeSaved(many)).toHaveLength(MAX_SAVED_CHATS);
+    expect(sanitizeSaved(many)[0]?.id).toBe("l-49");
+  });
+
+  it("keeps the list per account on this device and reports a refused write", () => {
+    const store = memoryStorage();
+    const entry = { id: "l-1", title: "t", savedAt: 1, messages: chat(1) };
+    expect(saveLocalSaved(null, [entry], store)).toBe(true);
+    expect(loadLocalSaved(null, store)).toEqual([entry]);
+    expect(loadLocalSaved("u1", store)).toEqual([]);
+    expect(saveLocalSaved(null, [], store)).toBe(true);
+    expect(loadLocalSaved(null, store)).toEqual([]);
+    const full = {
+      ...store,
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+    } as unknown as Storage;
+    expect(saveLocalSaved(null, [entry], full)).toBe(false);
+    expect(saveLocalSaved(null, [entry], null)).toBe(false);
   });
 });

@@ -1,5 +1,14 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Bot, ChevronDown, MapPin, MessageSquarePlus, Send, Sparkles } from "lucide-react";
+import {
+  Bookmark,
+  Bot,
+  ChevronDown,
+  FolderOpen,
+  MapPin,
+  MessageSquarePlus,
+  Send,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { extras, hazardLevel } from "@/data/simExtras";
 import { findLesson, isGradeId, isSubjectId, lessonExists } from "@/data/mockCurriculum";
@@ -22,12 +31,21 @@ import { buildTutorReply, detectIntent, MAX_QUESTION_LENGTH } from "@/data/tutor
 import { requestAiReply } from "@/lib/ai-tutor-client";
 import { useAuth } from "@/lib/auth";
 import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
-import { chatContext } from "@/lib/noor-chat";
+import { chatContext, type SavedChat } from "@/lib/noor-chat";
 import { studentStats } from "@/lib/progress";
-import { useNoorChat } from "@/lib/use-noor-chat";
+import { useNoorChat, useSavedChats, type SaveResult } from "@/lib/use-noor-chat";
 import { useProgress } from "@/lib/use-progress";
 import { NoorMarkdown } from "./NoorMarkdown";
 import { useNoorControl, useNoorLesson, useNoorOpen } from "./NoorProvider";
+import { NoorSavedChats } from "./NoorSavedChats";
+
+const SAVE_NOTE_KEYS: Record<SaveResult | "already", UiKey> = {
+  ok: "noorSavedOk",
+  already: "noorSavedAlready",
+  limit: "noorSavedLimit",
+  error: "noorSaveError",
+  empty: "noorSaveError",
+};
 
 const lessonPrompts: { intent: TutorIntent; label: L10n }[] = [
   { intent: "colloquial", label: { ar: "اشرحلي بالعامية", en: "Explain it simply" } },
@@ -116,6 +134,11 @@ export function NoorAssistant() {
 
   const chat = useNoorChat();
   const { messages } = chat;
+  const savedChats = useSavedChats();
+  const [showSaved, setShowSaved] = useState(false);
+  const [saveNote, setSaveNote] = useState<{ ok: boolean; key: UiKey } | null>(null);
+  /** Signature of the conversation last saved, so pressing Save twice doesn't duplicate it. */
+  const savedSig = useRef<string | null>(null);
   const [typing, setTyping] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -131,7 +154,16 @@ export function NoorAssistant() {
     runRef.current++;
     window.clearTimeout(timer.current);
     setTyping(false);
+    setShowSaved(false);
+    setSaveNote(null);
+    savedSig.current = null;
   }, [chat.scope]);
+
+  useEffect(() => {
+    if (!saveNote) return;
+    const id = window.setTimeout(() => setSaveNote(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [saveNote]);
 
   useEffect(
     () => () => {
@@ -217,6 +249,38 @@ export function NoorAssistant() {
     setTyping(false);
     chat.clear();
     setInput("");
+    savedSig.current = null;
+    setShowSaved(false);
+  };
+
+  /** Manual save of the current conversation into the saved list (never automatic). */
+  const saveChat = async () => {
+    const current = chat.messagesRef.current;
+    if (current.length === 0) return;
+    const sig = `${current.length}:${current[current.length - 1]?.text ?? ""}`;
+    if (savedSig.current === sig) {
+      setSaveNote({ ok: true, key: SAVE_NOTE_KEYS.already });
+      return;
+    }
+    const result = await savedChats.save(current, t("noorUntitled"));
+    if (result === "ok") savedSig.current = sig;
+    setSaveNote({ ok: result === "ok", key: SAVE_NOTE_KEYS[result] });
+  };
+
+  const toggleSaved = () => {
+    const next = !showSaved;
+    setShowSaved(next);
+    if (next) void savedChats.refresh();
+  };
+
+  /** Replaces the current conversation with a saved one (dropping any reply still in flight). */
+  const openSaved = (saved: SavedChat) => {
+    runRef.current++;
+    window.clearTimeout(timer.current);
+    setTyping(false);
+    chat.replace(saved.messages);
+    savedSig.current = `${saved.messages.length}:${saved.messages[saved.messages.length - 1]?.text ?? ""}`;
+    setShowSaved(false);
   };
 
   const submit = (e: FormEvent) => {
@@ -296,17 +360,6 @@ export function NoorAssistant() {
           </div>
           <button
             type="button"
-            onClick={newChat}
-            disabled={messages.length === 0 && !typing}
-            title={t("noorNewChat")}
-            aria-label={t("noorNewChat")}
-            className="flex items-center gap-1 rounded-xl border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <MessageSquarePlus className="size-3.5" />
-            {t("noorNewChat")}
-          </button>
-          <button
-            type="button"
             onClick={() => setOpen(false)}
             aria-label="Close"
             className="rounded-xl p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -315,7 +368,63 @@ export function NoorAssistant() {
           </button>
         </header>
 
-        <div className="border-b border-border px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2">
+          <button
+            type="button"
+            onClick={() => void saveChat()}
+            disabled={messages.length === 0}
+            className="flex items-center gap-1 rounded-xl border border-subject/40 bg-subject/10 px-2 py-1.5 text-[11px] font-semibold text-subject transition hover:bg-subject/20 disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Bookmark className="size-3.5" />
+            {t("noorSaveChat")}
+          </button>
+          <button
+            type="button"
+            onClick={newChat}
+            disabled={messages.length === 0 && !typing}
+            className="flex items-center gap-1 rounded-xl border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <MessageSquarePlus className="size-3.5" />
+            {t("noorNewChat")}
+          </button>
+          <button
+            type="button"
+            onClick={toggleSaved}
+            aria-pressed={showSaved}
+            className={
+              "ms-auto flex items-center gap-1 rounded-xl border px-2 py-1.5 text-[11px] font-semibold transition " +
+              (showSaved
+                ? "border-subject bg-subject/15 text-subject"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")
+            }
+          >
+            <FolderOpen className="size-3.5" />
+            {t("noorSavedChats")}
+          </button>
+          {saveNote && (
+            <p
+              role="status"
+              className={
+                "basis-full text-[11px] " + (saveNote.ok ? "text-bio" : "text-destructive")
+              }
+            >
+              {t(saveNote.key)}
+            </p>
+          )}
+        </div>
+
+        {showSaved && (
+          <NoorSavedChats
+            chats={savedChats.saved}
+            loading={savedChats.loading}
+            hasCurrent={messages.length > 0}
+            onOpen={openSaved}
+            onDelete={savedChats.remove}
+            onBack={() => setShowSaved(false)}
+          />
+        )}
+
+        <div className={"border-b border-border px-4 py-2.5 " + (showSaved ? "hidden" : "")}>
           <div className="flex items-start gap-2 rounded-xl border border-subject/30 bg-subject/10 px-3 py-2 text-xs">
             <MapPin className="mt-0.5 size-3.5 shrink-0 text-subject" />
             <span>
@@ -344,7 +453,10 @@ export function NoorAssistant() {
           )}
         </div>
 
-        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div
+          ref={scrollRef}
+          className={"flex-1 space-y-3 overflow-y-auto p-4 " + (showSaved ? "hidden" : "")}
+        >
           <div className="flex flex-col items-start gap-1.5">
             <div className="max-w-[85%] rounded-2xl rounded-es-md border border-border bg-background/60 px-3.5 py-2.5 text-sm leading-relaxed">
               <NoorMarkdown text={noorGreeting(lang)} />
@@ -390,7 +502,11 @@ export function NoorAssistant() {
           )}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-none">
+        <div
+          className={
+            "flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-none " + (showSaved ? "hidden" : "")
+          }
+        >
           {lesson &&
             lessonPrompts.map((p) => (
               <button
@@ -416,7 +532,12 @@ export function NoorAssistant() {
           ))}
         </div>
 
-        <form onSubmit={submit} className="flex items-center gap-2 border-t border-border p-3">
+        <form
+          onSubmit={submit}
+          className={
+            "flex items-center gap-2 border-t border-border p-3 " + (showSaved ? "hidden" : "")
+          }
+        >
           <input
             value={input}
             maxLength={MAX_QUESTION_LENGTH}
