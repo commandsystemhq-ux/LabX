@@ -36,7 +36,20 @@ import { studentStats } from "@/lib/progress";
 import { useNoorChat, useSavedChats, type SaveResult } from "@/lib/use-noor-chat";
 import { useProgress } from "@/lib/use-progress";
 import { NoorMarkdown } from "./NoorMarkdown";
-import { useNoorControl, useNoorLesson, useNoorOpen } from "./NoorProvider";
+import {
+  buildSupportReply,
+  phaseName,
+  supportLessonText,
+  supportScene,
+  supportStudentWork,
+} from "@/data/lessons/supportNoor";
+import {
+  useNoorControl,
+  useNoorLesson,
+  useNoorOpen,
+  useNoorRequest,
+  useNoorSupport,
+} from "./NoorProvider";
 import { NoorSavedChats } from "./NoorSavedChats";
 
 const SAVE_NOTE_KEYS: Record<SaveResult | "already", UiKey> = {
@@ -89,6 +102,8 @@ export function NoorAssistant() {
   const open = useNoorOpen();
   const { setOpen } = useNoorControl();
   const lessonCtx = useNoorLesson();
+  const supportCtx = useNoorSupport();
+  const request = useNoorRequest();
   const { user, getAccessToken } = useAuth();
   const progress = useProgress();
   const navigate = useNavigate();
@@ -97,10 +112,13 @@ export function NoorAssistant() {
   const page = pageFromPath(location.pathname);
   const search = location.search as Record<string, unknown>;
   const lesson = page === "lesson" ? lessonCtx : null;
+  const support = page === "lesson" ? supportCtx : null;
 
   const lessonId =
     page === "lesson"
-      ? (lesson?.lessonId ?? (typeof search["id"] === "string" ? search["id"] : undefined))
+      ? (lesson?.lessonId ??
+        support?.ctx.lessonId ??
+        (typeof search["id"] === "string" ? search["id"] : undefined))
       : undefined;
   const lookup = page === "lesson" ? findLesson(lessonId) : null;
   const gradeParam = search["grade"];
@@ -146,8 +164,8 @@ export function NoorAssistant() {
   const runRef = useRef(0);
 
   // Latest state, read when a (possibly delayed) reply is produced.
-  const live = useRef({ lang, lesson, platform, stats, progress });
-  live.current = { lang, lesson, platform, stats, progress };
+  const live = useRef({ lang, lesson, support, platform, stats, progress });
+  live.current = { lang, lesson, support, platform, stats, progress };
 
   // A different account (or sign-out) must not receive a reply that was still in flight.
   useEffect(() => {
@@ -195,10 +213,20 @@ export function NoorAssistant() {
         reply = buildPlatformReply(platformIntent, text, snap.platform, snap.stats, snap.progress);
       } else {
         const lessonIntent = hint?.lesson ?? detectIntent(text);
+        const sup = snap.support?.ctx ?? null;
         const accessToken = user ? await getAccessToken() : null;
         const aiText = await requestAiReply({
           question: text,
-          intent: snap.lesson ? lessonIntent : "general",
+          intent: snap.lesson || sup ? lessonIntent : "general",
+          support: sup
+            ? {
+                scene: supportScene(sup, snap.lang),
+                block: sup.block,
+                phase: sup.phase,
+                lessonText: supportLessonText(sup),
+                studentWork: supportStudentWork(sup, snap.lang),
+              }
+            : null,
           lang: snap.lang,
           accessToken,
           page: {
@@ -221,7 +249,12 @@ export function NoorAssistant() {
                 text: buildTutorReply(snap.lesson.sim, lessonIntent, snap.lesson.ctx),
                 actions: [],
               }
-            : buildPlatformReply("unknown", text, snap.platform, snap.stats, snap.progress);
+            : sup
+              ? {
+                  text: buildSupportReply(sup, text, lessonIntent, snap.lang),
+                  actions: [],
+                }
+              : buildPlatformReply("unknown", text, snap.platform, snap.stats, snap.progress);
         }
       }
       if (run !== runRef.current) return;
@@ -283,6 +316,16 @@ export function NoorAssistant() {
     setShowSaved(false);
   };
 
+  // Another part of the page asked Noor something (e.g. "review my explanation").
+  const handled = useRef(0);
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (!request || request.id === handled.current) return;
+    handled.current = request.id;
+    sendRef.current(request.text.slice(0, MAX_QUESTION_LENGTH), { lesson: "free" });
+  }, [request]);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const q = input.trim().slice(0, MAX_QUESTION_LENGTH);
@@ -316,14 +359,19 @@ export function NoorAssistant() {
   };
 
   // Teacher board mode on a lesson page: Noor steps aside.
-  if (lesson?.hidden) return null;
+  if (lesson?.hidden || support?.hidden) return null;
 
   const hazards = lesson?.ctx.hazards ?? [];
   const level = hazardLevel(hazards);
   const activeFault = lesson
     ? extras[lesson.sim.id].faults.find((f) => f.id === lesson.ctx.values.fault)
     : undefined;
-  const sceneLine = lesson ? lesson.sim.context(lesson.ctx.values, lang) : describePage(platform);
+  const inLesson = Boolean(lesson || support);
+  const sceneLine = lesson
+    ? lesson.sim.context(lesson.ctx.values, lang)
+    : support
+      ? supportScene(support.ctx, lang)
+      : describePage(platform);
 
   return (
     <>
@@ -355,7 +403,7 @@ export function NoorAssistant() {
           <div className="flex-1">
             <p className="font-bold">{t("aiTutor")}</p>
             <p className="text-[11px] text-muted-foreground">
-              {t(lesson ? "noorSubtitleLesson" : "noorSubtitlePlatform")}
+              {t(inLesson ? "noorSubtitleLesson" : "noorSubtitlePlatform")}
             </p>
           </div>
           <button
@@ -429,11 +477,25 @@ export function NoorAssistant() {
             <MapPin className="mt-0.5 size-3.5 shrink-0 text-subject" />
             <span>
               <span className="font-bold text-subject">
-                {t(lesson ? "currentScene" : "noorYouAreHere")}:
+                {t(inLesson ? "currentScene" : "noorYouAreHere")}:
               </span>{" "}
               {sceneLine}
             </span>
           </div>
+          {support && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Chip>{`${lang === "ar" ? "جزئية" : "Block"} ${support.ctx.block}/14`}</Chip>
+              <Chip>{l(phaseName(support.ctx.phase))}</Chip>
+              <Chip>{support.ctx.view === "3d" ? "3D" : "2D"}</Chip>
+              {support.ctx.mistakes.length > 0 && (
+                <Chip tone="warning">
+                  {lang === "ar"
+                    ? `${support.ctx.mistakes.length} أخطاء للمراجعة`
+                    : `${support.ctx.mistakes.length} to review`}
+                </Chip>
+              )}
+            </div>
+          )}
           {lesson && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Chip>{t(`steps${lesson.ctx.step}` as UiKey)}</Chip>
@@ -507,18 +569,26 @@ export function NoorAssistant() {
             "flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-none " + (showSaved ? "hidden" : "")
           }
         >
-          {lesson &&
-            lessonPrompts.map((p) => (
-              <button
-                key={p.intent}
-                type="button"
-                disabled={typing}
-                onClick={() => send(l(p.label), { lesson: p.intent })}
-                className="shrink-0 rounded-full border border-subject/30 bg-subject/10 px-3 py-1.5 text-xs font-semibold text-subject transition hover:bg-subject/20 disabled:opacity-50"
-              >
-                {l(p.label)}
-              </button>
-            ))}
+          {inLesson &&
+            lessonPrompts
+              .filter((p) => lesson || p.intent !== "hazard")
+              .map((p) => {
+                const label: L10n =
+                  support && p.intent === "why"
+                    ? { ar: "ليه غلطت؟", en: "Why was I wrong?" }
+                    : p.label;
+                return (
+                  <button
+                    key={p.intent}
+                    type="button"
+                    disabled={typing}
+                    onClick={() => send(l(label), { lesson: p.intent })}
+                    className="shrink-0 rounded-full border border-subject/30 bg-subject/10 px-3 py-1.5 text-xs font-semibold text-subject transition hover:bg-subject/20 disabled:opacity-50"
+                  >
+                    {l(label)}
+                  </button>
+                );
+              })}
           {noorPlatformPrompts.map((p) => (
             <button
               key={p.intent}

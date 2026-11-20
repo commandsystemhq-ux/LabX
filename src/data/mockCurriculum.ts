@@ -42,6 +42,8 @@ export interface Lesson {
   xp: number;
   simulationId: SimulationId;
   preset?: SimPreset;
+  /** Opens the interactive "live board" lesson (data/lessons/support*) instead of the simulation workspace. */
+  board?: "support";
 }
 
 export interface Unit {
@@ -114,9 +116,10 @@ type LessonSeed = [
   ar: string,
   en: string,
   minutes: number,
-  preset?: SimPreset,
+  preset?: SimPreset | undefined,
   /** Overrides the subject's default simulation (e.g. the biology "Be you" journey). */
-  sim?: SimulationId,
+  sim?: SimulationId | undefined,
+  board?: "support",
 ];
 type UnitSeed = { title: L10n; lessons: LessonSeed[] };
 
@@ -124,13 +127,14 @@ function build(grade: GradeId, subject: SubjectId, units: UnitSeed[]): Unit[] {
   return units.map((u, ui) => ({
     id: `${grade}-${subject}-u${ui + 1}`,
     title: u.title,
-    lessons: u.lessons.map(([ar, en, minutes, preset, sim], li) => ({
+    lessons: u.lessons.map(([ar, en, minutes, preset, sim, board], li) => ({
       id: `${grade}-${subject}-u${ui + 1}-l${li + 1}`,
       title: { ar, en },
       minutes,
       xp: minutes * 5,
       simulationId: sim ?? SIM[subject],
       ...(preset ? { preset } : {}),
+      ...(board ? { board } : {}),
     })),
   }));
 }
@@ -362,7 +366,14 @@ export const curriculum: Record<GradeId, Record<SubjectId, Unit[]>> = {
       {
         title: { ar: "الدعامة والحركة", en: "Support and Movement" },
         lessons: [
-          ["الهيكل العظمي", "The skeleton", 20],
+          [
+            "الدعامة في الكائنات الحية",
+            "Support in living organisms",
+            45,
+            undefined,
+            undefined,
+            "support",
+          ],
           ["الانقباض العضلي", "Muscle contraction", 24],
         ],
       },

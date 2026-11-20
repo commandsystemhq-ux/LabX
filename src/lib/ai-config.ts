@@ -14,6 +14,9 @@ export const MAX_QUESTION = 300;
 export const MAX_HISTORY_TURNS = 8;
 export const MAX_TURN_CHARS = 600;
 export const MAX_SUMMARY_CHARS = 1000;
+/** Verbatim textbook text of the live-board block on screen, and a digest of the student's work on it. */
+export const MAX_LESSON_TEXT = 6000;
+export const MAX_STUDENT_WORK = 1200;
 
 const REGION_RE = /^[a-z]{2}(?:-[a-z]+)+-\d{1,2}$/;
 const BEDROCK_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,199}$/;
@@ -263,6 +266,12 @@ export const askTutorInput = z.object({
   prediction: z.string().max(200).optional(),
   /** "question | picked | correct" for a quiz answer the student just got wrong. */
   quizMistake: z.string().max(500).optional(),
+  /** Live-board lesson: the block's textbook text (verbatim), the block number and the phase. */
+  lessonText: z.string().max(MAX_LESSON_TEXT).optional(),
+  supportBlock: z.number().int().min(1).max(14).optional(),
+  supportPhase: z.enum(["hook", "board", "lab", "quiz", "feynman", "test", "tools"]).optional(),
+  /** What the student drew / picked / got wrong on the board (plain text built by the client). */
+  studentWork: z.string().max(MAX_STUDENT_WORK).optional(),
 });
 export type AskTutorInput = z.infer<typeof askTutorInput>;
 export type AskTutorResult =

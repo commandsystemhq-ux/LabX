@@ -4,7 +4,9 @@ import type { SimulationDef } from "@/data/simulations";
 import type { TutorContext } from "@/data/tutor";
 import {
   MAX_HISTORY_TURNS,
+  MAX_LESSON_TEXT,
   MAX_QUESTION,
+  MAX_STUDENT_WORK,
   MAX_SUMMARY_CHARS,
   MAX_TURN_CHARS,
   type AskTutorInput,
@@ -40,6 +42,17 @@ export interface AiReplyParams {
   };
   /** Present only inside a lesson. */
   lesson?: { sim: SimulationDef; ctx: TutorContext } | null | undefined;
+  /** Present only inside the live-board lesson (no simulation): the block text and the student's work. */
+  support?:
+    | {
+        scene: string;
+        block: number;
+        phase: NonNullable<AskTutorInput["supportPhase"]>;
+        lessonText: string;
+        studentWork: string;
+      }
+    | null
+    | undefined;
   /** Earlier turns of this chat (before `question`), so Noor remembers the conversation. */
   history?: { role: "student" | "noor"; text: string }[] | undefined;
   /** Digest of the turns older than `history`. */
@@ -85,7 +98,20 @@ export async function requestAiReply(p: AiReplyParams): Promise<string | null> {
     page: p.page.page,
     ...(p.page.grade ? { grade: p.page.grade } : {}),
     ...(p.page.subject ? { subject: p.page.subject } : {}),
-    scene: (lesson && ctx ? lesson.sim.context(ctx.values, p.lang) : p.page.scene).slice(0, 600),
+    scene: (lesson && ctx
+      ? lesson.sim.context(ctx.values, p.lang)
+      : (p.support?.scene ?? p.page.scene)
+    ).slice(0, 600),
+    ...(p.support
+      ? {
+          lessonText: p.support.lessonText.slice(0, MAX_LESSON_TEXT),
+          supportBlock: p.support.block,
+          supportPhase: p.support.phase,
+          ...(p.support.studentWork
+            ? { studentWork: p.support.studentWork.slice(0, MAX_STUDENT_WORK) }
+            : {}),
+        }
+      : {}),
     hazards: (ctx?.hazards ?? [])
       .slice(0, 3)
       .map((h) => `${h.title[p.lang]}: ${h.cause[p.lang]}`.slice(0, 240)),

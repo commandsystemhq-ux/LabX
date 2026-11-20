@@ -11,6 +11,10 @@ src/components/
   dashboard/           TopBar (XP/streak)، UnitCard (الدروس والإتقان)، ProgressRing، WeeklyActivity
   lesson/              مساحة الدرس بالكامل (انظر §4)
     scenes/            مشاهد SVG لكل محاكاة × منظور (macro/molecular) — مكان Three.js مستقبلاً
+    board/             «السبورة الحية» (تُعرض بدل LessonWorkspace للدروس ذات `board:"support"`): SupportBoard (منسّق: تقدّم، رادار، كراسة، نور) ← BlockView (سؤال ← سبورة ← عملي ← عودة + feynman)،
+                       Scene (تبديل 3D ↔ 2D؛ كسول وبدون WebGL يرجع للرسمة)، BoneCanvas (مجسمات skeleton/muscles الحقيقية + boneFocus.ts) و PlantCanvas (خلية/أنسجة/ساق إجرائية)،
+                       labels.tsx (تسميات DOM بدل drei `Html` الذي يكسر React 19 عند فكّ الـ Canvas)، FigureSvg، DrawingLab (تسمية/تركيب، مختبر الترسيب)، LabTasks، LabTools، GraphLab، CompareArena،
+                       ExamTrap، FeynmanCheck (مايك Web Speech عبر lib/speech.ts مع fallback)، QuestionCard، SelfTests، MysteryCase، WeaknessRadar، PracticalDuel، Notebook
   noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML) و NoorSavedChats (قائمة المحادثات المحفوظة: فتح/حذف بتأكيد من نقرتين)
   brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
 src/data/
@@ -20,6 +24,13 @@ src/data/
   tutor.ts             كشف النية + بناء ردود المعلم من سياق الشاشة + buildIdleHint
   noor.ts              «نور» (المساعد العام): فهم الصفحة، نوايا المنصة (تحية/تنقّل/اقتراح/تقدم/دخول)، ردود محلية، وقائمة بيضاء لأزرار التنقل (parseActionTags) + lessonCatalog للـ AI
   quizCompare.ts       أرقام "قبل / اللي اخترته يعني / الفعلي" للإجابة الخاطئة
+  lessons/             «الدعامة في الكائنات الحية» (`g12-biology-u1-l1`، حقل `board: "support"` في `mockCurriculum`): بيانات ومنطق نقي بلا React.
+                       supportVerbatim.ts (مولَّد من docs/lesson1.txt بـ scripts/gen-support-verbatim.py: كل سطر حرفياً)، supportTypes.ts،
+                       supportBlocksA/B.ts (14 جزئية: hook / شرح عامي / مصيدة / مهام / feynman / أسئلة فورية) + supportSelfTests.ts (اختبر نفسك 1–6)،
+                       supportLesson.ts (التجميع + إعداد المشاهد والأدوات لكل جزئية)، supportLab.ts (مجموعات مجسمات BodyParts3D، مختبر الترسيب، منحنيات الفقرات والجمجمة، الكعبرة)،
+                       supportFigures.ts (رسمات 2D «شكل الامتحان» + callouts)، supportCompare.ts، supportRadar.ts، supportDuel.ts (seed في الرابط)،
+                       supportMystery.ts، supportNotebook.ts، supportProgress.ts (كلها تُنظَّف عند القراءة من localStorage)، supportNoor.ts (سياق نور + ردود محلية من نص الكتاب + مراجعة feynman)،
+                       anatomyNodes.ts (مولَّد من GLB بـ scripts/gen-anatomy-nodes.py)
 src/lib/
   i18n.tsx             LanguageProvider (ar/en + RTL) وكل نصوص الواجهة `ui`
   progress.ts          حالة التقدم + التحقق + دمج (mergeProgress) + repositories (memory للضيف، localStorage احتياطي بدون Supabase) + store (attachRepository)
@@ -44,26 +55,27 @@ vite.config.ts         plugins صريحة (tanstackStart, nitro للـ build ف�
 
 ## 2. خريطة التعديل السريعة
 
-| المهمة                                   | الملفات                                                                                                                                                                                                     |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| إضافة/تعديل درس أو وحدة                  | `data/mockCurriculum.ts` (+ اختبار السلامة في `test/simulations.test.ts`)                                                                                                                                   |
-| محاكاة جديدة                             | `simulations.ts` (النموذج + المحتوى) + `simExtras.ts` + مشهدان في `scenes/` + `scenes/index.ts` + `SimulationId` في `mockCurriculum.ts`                                                                     |
-| تغيير معادلة/متغير/سؤال                  | `simulations.ts` فقط (+ `simExtras.ts` إن تأثرت التحذيرات)                                                                                                                                                  |
-| عطل أو تحذير واقعي جديد                  | `simExtras.ts` (faults/hazards) + استخدام `fault` في الدالة الحسابية داخل `simulations.ts`                                                                                                                  |
-| خطوة موجّهة / حسابات / طبقة               | `simExtras.ts` (guided/calc/layers) + رسم الطبقة في المشهد المعني                                                                                                                                           |
-| ردود المعلم أو تلميحاته                  | `data/tutor.ts`؛ الشرائح والسياق المعروض في `components/noor/NoorAssistant.tsx`                                                                                                                             |
-| الاختبار والمقارنة البصرية               | `simulations.ts` (quiz/claims) + `quizCompare.ts` + `QuizView.tsx` + `useQuiz.ts`                                                                                                                           |
-| التقدم/XP/streak                         | `lib/progress.ts` (+ `use-progress.ts`)؛ العرض في `components/dashboard/*`                                                                                                                                  |
-| تسجيل الدخول/الحساب/Supabase             | `routes/auth.tsx`, `lib/auth.tsx`, `lib/auth-utils.ts`, `lib/supabase.ts`, `lib/progress-remote.ts`, `supabase/schema.sql`, `Navbar.tsx`                                                                    |
-| مزوّد الـ AI / لوحة الإدارة / مؤقت الخمول | `lib/ai-config.ts`, `lib/ai/*.server.ts`, `lib/ai-tutor.functions.ts`, `routes/admin.tsx`, `components/noor/NoorAssistant.tsx`؛ الخمول: `useIdleHint.ts`, `IdleHintCard.tsx`, `buildIdleHint` في `tutor.ts` |
-| إعداد محاكاة خاص بدرس                    | `preset` (`values`/`view`/`layers`) في `mockCurriculum.ts` + `lessonDefaults` في `simulations.ts` + `lessonLayers` في `simExtras.ts` (يُطبَّق في `LessonWorkspace`)                                            |
-| لوحة إثراء جديدة على المسرح              | دالة نقية + `LayerDef` في `simExtras.ts`، ومكوّن في `StageInsets.tsx`، وعرضه في `SimulationStage.tsx`                                                                                                        |
-| شكل المنصة (stage/toolbar/HUD)           | `SimulationStage.tsx`, `StageToolbar.tsx`, `StageInsets.tsx`, `HazardBanner.tsx`                                                                                                                            |
-| لوحة التحكم (sliders/حسابات/وضع الأخطاء) | `ControlPanel.tsx`, `ErrorModePanel.tsx`                                                                                                                                                                    |
-| نص واجهة أو ترجمة                        | `lib/i18n.tsx` (`ui`)؛ نصوص المحتوى تبقى في `data/*` بصيغة `{ar,en}`                                                                                                                                        |
-| ألوان/animations                         | `styles.css`                                                                                                                                                                                                |
-| صفحة جديدة                               | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                                                                                          |
-| Three.js                                 | مفعّل لمحاكاة `adrenaline` فقط (`scenes/Adrenaline*.tsx` + `adr3d-*`)؛ باقي المشاهد SVG ويمكن استبدالها بنفس الـ props (`SceneProps`)                                                                        |
+| المهمة                                     | الملفات                                                                                                                                                                                                                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| إضافة/تعديل درس أو وحدة                    | `data/mockCurriculum.ts` (+ اختبار السلامة في `test/simulations.test.ts`)                                                                                                                                                                                                        |
+| محاكاة جديدة                               | `simulations.ts` (النموذج + المحتوى) + `simExtras.ts` + مشهدان في `scenes/` + `scenes/index.ts` + `SimulationId` في `mockCurriculum.ts`                                                                                                                                          |
+| تغيير معادلة/متغير/سؤال                    | `simulations.ts` فقط (+ `simExtras.ts` إن تأثرت التحذيرات)                                                                                                                                                                                                                       |
+| عطل أو تحذير واقعي جديد                    | `simExtras.ts` (faults/hazards) + استخدام `fault` في الدالة الحسابية داخل `simulations.ts`                                                                                                                                                                                       |
+| خطوة موجّهة / حسابات / طبقة                 | `simExtras.ts` (guided/calc/layers) + رسم الطبقة في المشهد المعني                                                                                                                                                                                                                |
+| درس «السبورة الحية» (جزئية/مهمة/رسمة/أداة) | `data/lessons/*` (المحتوى والمنطق) + `components/lesson/board/*` (الواجهة)؛ النص الحرفي يُولَّد بـ `python scripts/gen-support-verbatim.py`؛ نور: `data/lessons/supportNoor.ts` + `NoorProvider.setSupport` + حقول `lessonText/studentWork` في `ai-config.ts`/`providers.server.ts` |
+| ردود المعلم أو تلميحاته                    | `data/tutor.ts`؛ الشرائح والسياق المعروض في `components/noor/NoorAssistant.tsx`                                                                                                                                                                                                  |
+| الاختبار والمقارنة البصرية                 | `simulations.ts` (quiz/claims) + `quizCompare.ts` + `QuizView.tsx` + `useQuiz.ts`                                                                                                                                                                                                |
+| التقدم/XP/streak                           | `lib/progress.ts` (+ `use-progress.ts`)؛ العرض في `components/dashboard/*`                                                                                                                                                                                                       |
+| تسجيل الدخول/الحساب/Supabase               | `routes/auth.tsx`, `lib/auth.tsx`, `lib/auth-utils.ts`, `lib/supabase.ts`, `lib/progress-remote.ts`, `supabase/schema.sql`, `Navbar.tsx`                                                                                                                                         |
+| مزوّد الـ AI / لوحة الإدارة / مؤقت الخمول   | `lib/ai-config.ts`, `lib/ai/*.server.ts`, `lib/ai-tutor.functions.ts`, `routes/admin.tsx`, `components/noor/NoorAssistant.tsx`؛ الخمول: `useIdleHint.ts`, `IdleHintCard.tsx`, `buildIdleHint` في `tutor.ts`                                                                      |
+| إعداد محاكاة خاص بدرس                      | `preset` (`values`/`view`/`layers`) في `mockCurriculum.ts` + `lessonDefaults` في `simulations.ts` + `lessonLayers` في `simExtras.ts` (يُطبَّق في `LessonWorkspace`)                                                                                                                 |
+| لوحة إثراء جديدة على المسرح                | دالة نقية + `LayerDef` في `simExtras.ts`، ومكوّن في `StageInsets.tsx`، وعرضه في `SimulationStage.tsx`                                                                                                                                                                             |
+| شكل المنصة (stage/toolbar/HUD)             | `SimulationStage.tsx`, `StageToolbar.tsx`, `StageInsets.tsx`, `HazardBanner.tsx`                                                                                                                                                                                                 |
+| لوحة التحكم (sliders/حسابات/وضع الأخطاء)   | `ControlPanel.tsx`, `ErrorModePanel.tsx`                                                                                                                                                                                                                                         |
+| نص واجهة أو ترجمة                          | `lib/i18n.tsx` (`ui`)؛ نصوص المحتوى تبقى في `data/*` بصيغة `{ar,en}`                                                                                                                                                                                                             |
+| ألوان/animations                           | `styles.css`                                                                                                                                                                                                                                                                     |
+| صفحة جديدة                                 | ملف في `routes/` (يُولَّد `routeTree.gen.ts` تلقائياً)                                                                                                                                                                                                                               |
+| Three.js                                   | مفعّل لمحاكاة `adrenaline` فقط (`scenes/Adrenaline*.tsx` + `adr3d-*`)؛ باقي المشاهد SVG ويمكن استبدالها بنفس الـ props (`SceneProps`)                                                                                                                                             |
 
 - رحلة «الأدرينالين والقلب» = محاكاة رابعة `adrenaline` (الأحياء، الدرسان `g12-biology-u4-l1/l2`): مفاتيح `adrenaline/oxygen/glucose` في `SimKey`، مخرجات النبض وتدفق الدم واستجابة المخ، أعطال (نوبة أدرينالين / تضيّق شريان المخ / حاصرات بيتا)، مشهدان ثلاثيا الأبعاد حقيقيان (three + @react-three/fiber + drei) بنفس `SceneProps`: `BodyScene` (macro) و`SignalScene` (molecular) يلفّان `AdrenalineStage` (كشف WebGL + تحميل كسول لـ `AdrenalineCanvas`، client-only، fallback نصّي بدون WebGL). التشريح من نماذج **BodyParts3D** الحقيقية في `public/models/anatomy/*.glb` (عضلات، هيكل، أوعية، قلب، مخ، حبل شوكي/أعصاب، كظرية+كلى؛ الترخيص **CC BY-SA 2.1 Japan** في `ATTRIBUTION.md`) وتُحمَّل كسولاً لكل طبقة؛ ممنوع رسم الجسم أو الأعضاء بـ Sphere/Cylinder/Box. كل ملف له مركز/مقياس (mm) تحوّله `placementOf` لإطار جسم واحد (وحدة = 250mm). الملفات: `adr3d-model.ts` (محطات، طبقات، إحداثيات، اشتقاق الحركة من القيم، تسميات)، `adr3d-atlas.tsx` (طبقات solid/X-ray/hidden، التقاط الأجزاء والعزل، القلب النابض بتحجيم كل حجرة حول مركزها، توهّج الكظرية)، `adr3d-route.ts` + `adr3d-ride.tsx` (رحلة الدم داخل مسار الأوعية الحقيقي من الكظرية للقلب فالمخ/العضلة، تضيّق الشريان، تلفّت 360°، إفراز الأدرينالين)، `adr3d-micro.tsx` (ساركومير/خلية عصبية/مستقبل بخامات PBR)، `adr3d-names.ts` (أسماء AR/EN)، `adr3d-geometry.ts`. القيم الحية تُمرَّر عبر `ref` وتُقرأ داخل `useFrame` (لا setState في الحلقة)، والتسميات DOM تُسقَط كل إطار من إحداثيات 3D، وأي هندسة/خامة خارجية تُفرَّغ بـ `dispose`. حالتها الحية تصل لنور عبر `sim.context` + `hazards` كأي محاكاة.
 
@@ -102,6 +114,13 @@ auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSu
 اللغة: LanguageProvider ◀─ localStorage `labx.lang`؛ كل نص = `ui[key][lang]` أو `{ar,en}`
 ```
 
+```
+السبورة الحية: routes/lesson.tsx ─ lesson.board==="support" ─▶ SupportBoard ─▶ BlockView ─▶ Scene(3D|2D) + لوحة المرحلة
+   كل نتيجة/خطأ/رسم ─▶ TaskEvent ─▶ radar (localStorage) + mistakes/actions ─▶ NoorProvider.setSupport ─▶ NoorAssistant
+   ضيف: buildSupportReply (اقتباس حرفي من الكتاب + تصحيح آخر غلطة)  |  مسجَّل: requestAiReply(support) ─▶ <lesson_text>/<student_work>
+   الرابط ?duel=SEED&vs=SCORE-MS ─▶ PracticalDuel (نفس الأسئلة للاتنين)
+```
+
 ## 5. قواعد التنفيذ الثابتة
 
 1. **في كل أمر جديد:** اقرأ هذا الملف أولاً، واكتب **خطة من سطرين فقط** قبل لمس أي كود.
@@ -112,6 +131,8 @@ auth: AuthProvider (root) ─▶ onAuthStateChange ─▶ userId ─▶ createSu
 6. الأرقام والنصوص المعروضة ثنائية اللغة؛ لا تضف نصاً عربياً فقط. Prettier إلزامي (`npx prettier --write` للملفات المعدّلة).
 
 ## 6. قيود معروفة
+
+- درس الدعامة: لا توجد مجسمات BodyParts3D للأربطة ولا للحوض الأنثوي ولا للعصعص، فتُرسم كعلامات/أنابيب/حلقات توضيحية فوق الهيكل الحقيقي (تُحسب من صناديق التحديد)؛ الفقرات 30–33 تُضاء على عظمة العجز. الأسئلة والمهام ذات الإجابة المحددة تأتي من الكتاب فقط، و«اختبر نفسك» كتبت أسئلتها من محتوى الأقسام لأن نص الاختبارات نفسه ليس في `docs/lesson1.txt`. لا تستخدم `Html` من drei داخل الـ Canvas (استخدم `labels.tsx`).
 
 - محاكاة واحدة لكل مادة تُستخدم لكل دروسها؛ التمييز بين الدروس عبر `preset` (قيم بداية + المنظور). أسئلة الاختبار والمقارنة مرتبطة بقيم النموذج الافتراضية لا بالـ preset.
 - XP/streak يحسبهما العميل ويخزّنهما في صف المستخدم (RLS يمنع الوصول لغيره لكن لا يمنع المستخدم من تعديل صفه)؛ لا تستخدمهما لأي مكافأة ذات قيمة مالية بدون تحقق من السيرفر.
