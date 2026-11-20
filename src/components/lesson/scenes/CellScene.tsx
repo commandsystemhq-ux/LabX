@@ -3,10 +3,15 @@ import { useLang } from "@/lib/i18n";
 import { frac, rand, type SceneProps, useIntegrated } from "./sceneUtils";
 
 /** Macro view: a cell with particles diffusing inward through its membrane. */
-export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
+export function CellScene({ t, values, activity, labels, flow, layers, hazard }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { rate } = computeDiffusion(values.temperature, values.gradient, values.permeability);
+  const { rate, leaky } = computeDiffusion(
+    values.temperature,
+    values.gradient,
+    values.permeability,
+    values.fault,
+  );
   const phase = useIntegrated(t, activity * 0.35);
   const count = Math.round(6 + (values.gradient / 100) * 34);
   const cx = 300;
@@ -26,9 +31,9 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
         r="120"
         fill="var(--bio)"
         fillOpacity="0.06"
-        stroke="var(--bio)"
+        stroke={leaky ? "var(--destructive)" : "var(--bio)"}
         strokeWidth="5"
-        strokeDasharray={`${4 + values.permeability / 10} 6`}
+        strokeDasharray={leaky ? "10 22" : `${4 + values.permeability / 10} 6`}
         strokeDashoffset={-t * 14}
       />
       <circle
@@ -73,6 +78,57 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
         strokeWidth="2"
         transform={`rotate(25 ${cx + 55} ${cy + 60})`}
       />
+
+      {/* Layer: anatomy — organelles and membrane channel proteins */}
+      {layers["anatomy"] && (
+        <g pointerEvents="none">
+          <ellipse
+            cx={cx - 20}
+            cy={cy - 55}
+            rx="26"
+            ry="12"
+            fill="var(--chem)"
+            fillOpacity="0.25"
+            stroke="var(--chem)"
+            strokeWidth="2"
+            transform={`rotate(15 ${cx - 20} ${cy - 55})`}
+          />
+          <path
+            d={`M ${cx + 40} ${cy + 20} q 12 -14 24 0 t 24 0 t 24 0`}
+            fill="none"
+            stroke="var(--phys)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i / 8) * Math.PI * 2 + 0.2;
+            const open = values.permeability > (i / 8) * 100;
+            return (
+              <rect
+                key={i}
+                x={cx + Math.cos(a) * 120 - 5}
+                y={cy + Math.sin(a) * 120 - 5}
+                width="10"
+                height="10"
+                rx="2"
+                fill={open ? "var(--warning)" : "var(--muted)"}
+                transform={`rotate(${(a * 180) / Math.PI} ${cx + Math.cos(a) * 120} ${cy + Math.sin(a) * 120})`}
+              />
+            );
+          })}
+          <g fontSize="11" fontWeight="600" fill="var(--muted-foreground)">
+            <text x={cx - 20} y={cy - 78} textAnchor="middle">
+              {ar ? "ميتوكوندريا" : "Mitochondrion"}
+            </text>
+            <text x={cx + 64} y={cy + 8} textAnchor="middle">
+              {ar ? "شبكة إندوبلازمية" : "ER"}
+            </text>
+            <text x={cx + 150} y={cy - 120} textAnchor="middle" fill="var(--warning)">
+              {ar ? "قنوات بروتينية" : "Channel proteins"}
+            </text>
+          </g>
+        </g>
+      )}
 
       {Array.from({ length: 40 }, (_, i) => {
         if (i >= count) return null;
@@ -119,6 +175,11 @@ export function CellScene({ t, values, activity, labels, flow }: SceneProps) {
 
       {labels && (
         <g fontSize="12" fontWeight="600" fill="var(--muted-foreground)">
+          {hazard > 0 && (
+            <text x={cx} y="30" textAnchor="middle" fill="var(--destructive)" fontWeight="700">
+              {leaky ? (ar ? "غشاء مسرّب" : "Leaky membrane") : ""}
+            </text>
+          )}
           <text x={cx + 10} y={cy + 52} textAnchor="middle">
             {ar ? "النواة" : "Nucleus"}
           </text>

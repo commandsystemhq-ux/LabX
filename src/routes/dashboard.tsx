@@ -20,6 +20,7 @@ import {
   type SubjectId,
 } from "@/data/mockCurriculum";
 import { useLang } from "@/lib/i18n";
+import { useMastery } from "@/lib/use-progress";
 
 interface DashboardSearch {
   grade?: GradeId | undefined;
@@ -61,9 +62,10 @@ function Dashboard() {
 
   const units = curriculum[grade][subjectId];
   const subject = subjects.find((s) => s.id === subjectId) ?? subjects[1]!;
-  const mastery = subjectMastery(units);
+  const masteryOf = useMastery();
+  const mastery = subjectMastery(units, masteryOf);
   const nextLesson =
-    units.flatMap((u) => u.lessons).find((x) => x.mastery > 0 && x.mastery < 85) ??
+    units.flatMap((u) => u.lessons).find((x) => masteryOf(x) > 0 && masteryOf(x) < 85) ??
     units[0]!.lessons[0]!;
 
   const setSearch = (patch: DashboardSearch) =>
@@ -90,7 +92,7 @@ function Dashboard() {
         >
           {subjects.map((s) => {
             const active = s.id === subjectId;
-            const m = subjectMastery(curriculum[grade][s.id]);
+            const m = subjectMastery(curriculum[grade][s.id], masteryOf);
             return (
               <button
                 key={s.id}

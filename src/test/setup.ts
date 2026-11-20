@@ -18,3 +18,14 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// jsdom does not implement element scrolling.
+Element.prototype.scrollTo = () => {};
+
+// Radix sliders and Recharts' ResponsiveContainer observe element sizes.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub;

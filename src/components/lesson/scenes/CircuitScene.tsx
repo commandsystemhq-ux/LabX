@@ -20,14 +20,18 @@ function pointOnLoop(u: number) {
 }
 
 /** Macro view: a simple DC circuit — battery, resistor, bulb, ammeter, drifting electrons. */
-export function CircuitScene({ t, values, labels, flow }: SceneProps) {
+export function CircuitScene({ t, values, labels, flow, layers, hazard }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { current, power, rEff } = computeOhm(
+  const { current, power, rEff, contactPower } = computeOhm(
     values.voltage,
     values.resistance,
     values.temperature,
+    values.fault,
   );
+  const wireColor =
+    hazard === 2 ? "var(--destructive)" : hazard === 1 ? "var(--warning)" : "var(--phys)";
+  const flicker = hazard === 2 ? 0.55 + 0.45 * Math.abs(Math.sin(t * 17)) : 1;
   const phase = useIntegrated(t, Math.min(current * 0.09, 1.4));
   const heat = Math.min(1, Math.max(0, (values.temperature - 25) / 125));
   const glow = Math.min(1, power / 60);
@@ -44,6 +48,10 @@ export function CircuitScene({ t, values, labels, flow }: SceneProps) {
         <radialGradient id="bulb-glow">
           <stop offset="0%" stopColor="var(--warning)" stopOpacity="0.95" />
           <stop offset="100%" stopColor="var(--warning)" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="ir-glow">
+          <stop offset="0%" stopColor="var(--heat)" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="var(--heat)" stopOpacity="0" />
         </radialGradient>
         <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" result="b" />
@@ -73,7 +81,7 @@ export function CircuitScene({ t, values, labels, flow }: SceneProps) {
         height={H}
         rx="4"
         fill="none"
-        stroke="var(--phys)"
+        stroke={wireColor}
         strokeOpacity={0.15 + Math.min(current / 4, 1) * 0.6}
         strokeWidth="2"
         filter="url(#soft-glow)"
@@ -138,7 +146,13 @@ export function CircuitScene({ t, values, labels, flow }: SceneProps) {
         ))}
 
       {/* Bulb (right) */}
-      <circle cx={X0 + W} cy="190" r={30 + glow * 40} fill="url(#bulb-glow)" opacity={glow} />
+      <circle
+        cx={X0 + W}
+        cy="190"
+        r={30 + glow * 40}
+        fill="url(#bulb-glow)"
+        opacity={glow * flicker}
+      />
       <circle
         cx={X0 + W}
         cy="190"
@@ -186,6 +200,89 @@ export function CircuitScene({ t, values, labels, flow }: SceneProps) {
           strokeLinecap="round"
         />
       </g>
+
+      {/* Fault: ammeter wired across the source (short circuit) */}
+      {values.fault === 1 && (
+        <g>
+          <line
+            x1={X0}
+            y1="190"
+            x2="274"
+            y2={Y0 + H}
+            stroke="var(--destructive)"
+            strokeWidth="4"
+            strokeDasharray="8 6"
+            strokeDashoffset={-t * 40}
+            strokeLinecap="round"
+          />
+          <text
+            x="170"
+            y="262"
+            fill="var(--destructive)"
+            fontSize="12"
+            fontWeight="700"
+            textAnchor="middle"
+          >
+            {ar ? "قصر دائرة" : "SHORT"}
+          </text>
+        </g>
+      )}
+
+      {/* Fault: loose joint throwing sparks */}
+      {values.fault === 2 &&
+        contactPower > 0.5 &&
+        [0, 1, 2, 3].map((k) => {
+          const a = t * 9 + k * 1.7;
+          return (
+            <line
+              key={k}
+              x1={X0 + 150}
+              y1={Y0}
+              x2={X0 + 150 + Math.cos(a) * (10 + k * 4)}
+              y2={Y0 - Math.abs(Math.sin(a * 1.3)) * (14 + k * 5)}
+              stroke="var(--warning)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              opacity={0.4 + 0.6 * Math.abs(Math.sin(a))}
+            />
+          );
+        })}
+
+      {/* Layer: see the unseen — magnetic field loops and infrared glow */}
+      {layers["hidden"] && (
+        <g pointerEvents="none">
+          <circle
+            cx="300"
+            cy={Y0}
+            r={26 + Math.min(1, power / 80) * 50}
+            fill="url(#ir-glow)"
+            opacity={0.25 + Math.min(0.6, power / 120)}
+          />
+          {[0, 1, 2].map((k) => (
+            <ellipse
+              key={k}
+              cx={X0 + 60}
+              cy={Y0}
+              rx={14 + k * 11}
+              ry={6 + k * 5}
+              fill="none"
+              stroke="var(--chem)"
+              strokeOpacity={Math.min(1, 0.2 + current / 3) * (1 - k * 0.22)}
+              strokeWidth="1.5"
+              strokeDasharray="5 4"
+              strokeDashoffset={-t * 26}
+            />
+          ))}
+          <g fontFamily="var(--font-mono)" fontSize="11" fontWeight="700" fill="var(--chem)">
+            <text x={X0 + 28} y={Y0 - 44}>
+              B ∝ I = {current.toFixed(2)} A
+            </text>
+            <text x="300" y={Y0 + 62} textAnchor="middle" fill="var(--heat)">
+              {ar ? "حرارة" : "heat"} {power.toFixed(0)} W
+            </text>
+          </g>
+        </g>
+      )}
 
       {/* Conventional current arrows */}
       {flow &&

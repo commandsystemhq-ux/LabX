@@ -1,6 +1,7 @@
 import { Flame, Sparkles, Trophy } from "lucide-react";
-import { grades, student, type GradeId } from "@/data/mockCurriculum";
+import { grades, type GradeId } from "@/data/mockCurriculum";
 import { useLang } from "@/lib/i18n";
+import { useStudentStats } from "@/lib/use-progress";
 
 export function DashboardTopBar({
   grade,
@@ -10,6 +11,7 @@ export function DashboardTopBar({
   onGrade: (g: GradeId) => void;
 }) {
   const { l, t, lang } = useLang();
+  const stats = useStudentStats();
   return (
     <div className="glass flex flex-col gap-4 rounded-3xl p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
       <div
@@ -43,13 +45,13 @@ export function DashboardTopBar({
         <div className="flex items-center gap-2 rounded-2xl border border-phys/30 bg-phys/10 px-3.5 py-2">
           <Sparkles className="size-4 text-phys" />
           <span className="font-mono text-base font-bold text-phys">
-            {student.xp.toLocaleString("en-US")}
+            {stats.xp.toLocaleString("en-US")}
           </span>
           <span className="text-xs text-muted-foreground">{t("xp")}</span>
         </div>
         <div className="flex items-center gap-2 rounded-2xl border border-warning/30 bg-warning/10 px-3.5 py-2">
           <Flame className="size-4 animate-blink text-warning" />
-          <span className="font-mono text-base font-bold text-warning">{student.streak}</span>
+          <span className="font-mono text-base font-bold text-warning">{stats.streak}</span>
           <span className="text-xs text-muted-foreground">{t("streak")}</span>
         </div>
         <div className="flex items-center gap-2 rounded-2xl border border-chem/30 bg-chem/10 px-3.5 py-2">
@@ -57,7 +59,7 @@ export function DashboardTopBar({
           <span className="text-xs text-muted-foreground">
             {lang === "ar" ? "المستوى" : "Level"}
           </span>
-          <span className="font-mono text-base font-bold text-chem">{student.level}</span>
+          <span className="font-mono text-base font-bold text-chem">{stats.level}</span>
         </div>
       </div>
     </div>

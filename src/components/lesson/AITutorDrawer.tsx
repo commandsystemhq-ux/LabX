@@ -1,7 +1,15 @@
 import { Bot, ChevronDown, MapPin, Send, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { extras, hazardLevel, type Hazard } from "@/data/simExtras";
 import type { SimValues, SimulationDef, TutorIntent, ValueChange } from "@/data/simulations";
-import { useLang, type L10n } from "@/lib/i18n";
+import {
+  buildTutorReply,
+  detectIntent,
+  MAX_QUESTION_LENGTH,
+  type ControlMode,
+  type TutorContext,
+} from "@/data/tutor";
+import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
 
 interface Message {
   id: number;
@@ -12,6 +20,8 @@ interface Message {
 const prompts: { intent: TutorIntent; label: L10n }[] = [
   { intent: "colloquial", label: { ar: "اشرحلي بالعامية", en: "Explain it simply" } },
   { intent: "why", label: { ar: "ليه القراءة اتغيرت؟", en: "Why did the reading change?" } },
+  { intent: "hint", label: ui.tutorHint },
+  { intent: "hazard", label: ui.tutorHazard },
   { intent: "example", label: { ar: "إديني مثال من الحياة", en: "Real-life example" } },
   { intent: "mistake", label: { ar: "إيه الغلطة الشائعة؟", en: "Common mistake?" } },
 ];
@@ -22,9 +32,39 @@ interface Props {
   sim: SimulationDef;
   values: SimValues;
   lastChange: ValueChange | null;
+  step: number;
+  mode: ControlMode;
+  view: "macro" | "molecular";
+  hazards: Hazard[];
+  errorMode: boolean;
+  guided: TutorContext["guided"];
 }
 
-export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: Props) {
+function Chip({
+  children,
+  tone = "neutral",
+}: {
+  children: string;
+  tone?: "neutral" | "warning" | "danger";
+}) {
+  return (
+    <span
+      className={
+        "rounded-full border px-2 py-0.5 text-[10px] font-semibold " +
+        (tone === "danger"
+          ? "border-destructive/60 bg-destructive/15 text-destructive"
+          : tone === "warning"
+            ? "border-warning/60 bg-warning/15 text-warning"
+            : "border-border bg-background/60 text-muted-foreground")
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+export function AITutorDrawer(props: Props) {
+  const { open, onOpenChange, sim, values, step, mode, view, hazards, errorMode, guided } = props;
   const { t, l, lang } = useLang();
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState(false);
@@ -33,21 +73,31 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
   const idRef = useRef(1);
   const timer = useRef<number | undefined>(undefined);
 
-  // Latest scene state for delayed replies.
-  const live = useRef({ values, lastChange, lang });
-  live.current = { values, lastChange, lang };
+  // Latest scene state, read when the (delayed) reply is produced.
+  const live = useRef<TutorContext>(null as unknown as TutorContext);
+  live.current = {
+    lang,
+    values,
+    change: props.lastChange,
+    step,
+    mode,
+    view,
+    hazards,
+    errorMode,
+    guided,
+  };
 
   useEffect(() => {
-    setMessages([
-      {
-        id: 0,
-        role: "tutor",
-        text:
-          lang === "ar"
-            ? "أهلاً! أنا المعلم الذكي 👋 شايف كل اللي بيحصل في المحاكاة دلوقتي. اسألني أي حاجة أو اختار سؤال جاهز."
-            : "Hi! I'm your AI tutor 👋 I can see everything happening in the simulation. Ask me anything or pick a prompt.",
-      },
-    ]);
+    const greeting: Message = {
+      id: 0,
+      role: "tutor",
+      text:
+        lang === "ar"
+          ? "أهلاً! أنا المعلم الذكي 👋 شايف كل اللي بيحصل في المحاكاة دلوقتي. اسألني أي حاجة أو اختار سؤال جاهز."
+          : "Hi! I'm your AI tutor 👋 I can see everything happening in the simulation. Ask me anything or pick a prompt.",
+    };
+    // Keep the conversation when the language flips; only the greeting is re-localised.
+    setMessages((m) => (m.length === 0 ? [greeting] : [greeting, ...m.slice(1)]));
   }, [lang]);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -61,22 +111,24 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
     setMessages((m) => [...m, { id: idRef.current++, role: "student", text }]);
     setTyping(true);
     timer.current = window.setTimeout(() => {
-      const { values: v, lastChange: c, lang: lg } = live.current;
       setMessages((m) => [
         ...m,
-        { id: idRef.current++, role: "tutor", text: sim.tutor(intent, v, lg, c) },
+        { id: idRef.current++, role: "tutor", text: buildTutorReply(sim, intent, live.current) },
       ]);
       setTyping(false);
-    }, 900);
+    }, 700);
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const q = input.trim();
+    const q = input.trim().slice(0, MAX_QUESTION_LENGTH);
     if (!q) return;
     setInput("");
-    ask(q, "free");
+    ask(q, detectIntent(q));
   };
+
+  const level = hazardLevel(hazards);
+  const activeFault = extras[sim.id].faults.find((f) => f.id === values.fault);
 
   return (
     <>
@@ -94,6 +146,7 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
       <aside
         aria-label={t("aiTutor")}
         aria-hidden={!open}
+        inert={!open}
         className={
           "glass-strong fixed inset-x-2 bottom-2 z-50 flex h-[72dvh] flex-col overflow-hidden rounded-3xl transition-all duration-300 sm:inset-x-auto sm:end-4 sm:bottom-4 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-[400px] " +
           (open ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-8 opacity-0")
@@ -128,6 +181,18 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
               {sim.context(values, lang)}
             </span>
           </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Chip>{t(`steps${step}` as UiKey)}</Chip>
+            <Chip>{t(mode === "guided" ? "modeGuided" : "modeFree")}</Chip>
+            <Chip>{t(view)}</Chip>
+            {activeFault && <Chip tone="danger">{l(activeFault.label)}</Chip>}
+            {level > 0 && hazards[0] && (
+              <Chip tone={level === 2 ? "danger" : "warning"}>{l(hazards[0].title)}</Chip>
+            )}
+            {step === 2 && mode === "guided" && guided && !guided.done && (
+              <Chip tone="warning">{l(guided.step.title)}</Chip>
+            )}
+          </div>
         </div>
 
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -138,7 +203,7 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
             >
               <p
                 className={
-                  "max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed " +
+                  "max-w-[85%] whitespace-pre-line break-words rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed " +
                   (m.role === "student"
                     ? "rounded-ee-md bg-subject text-primary-foreground"
                     : "rounded-es-md border border-border bg-background/60")
@@ -173,6 +238,7 @@ export function AITutorDrawer({ open, onOpenChange, sim, values, lastChange }: P
         <form onSubmit={submit} className="flex items-center gap-2 border-t border-border p-3">
           <input
             value={input}
+            maxLength={MAX_QUESTION_LENGTH}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t("askPlaceholder")}
             className="h-10 flex-1 rounded-xl border border-input bg-background/60 px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-subject"

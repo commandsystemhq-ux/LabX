@@ -328,10 +328,46 @@ export function findLesson(id: string | undefined): LessonLookup {
   throw new Error("Default lesson missing from curriculum");
 }
 
-export function subjectMastery(units: Unit[]) {
+export type MasteryResolver = (lesson: Lesson) => number;
+const seededMastery: MasteryResolver = (lesson) => lesson.mastery;
+
+export function subjectMastery(units: Unit[], mastery: MasteryResolver = seededMastery) {
   const all = units.flatMap((u) => u.lessons);
   if (all.length === 0) return 0;
-  return Math.round(all.reduce((s, l) => s + l.mastery, 0) / all.length);
+  return Math.round(all.reduce((s, l) => s + mastery(l), 0) / all.length);
+}
+
+export function unitMastery(unit: Unit, mastery: MasteryResolver = seededMastery) {
+  return subjectMastery([unit], mastery);
+}
+
+/** Every lesson in curriculum order (grade → subject → unit → lesson). */
+export function allLessons(): LessonLookup[] {
+  const out: LessonLookup[] = [];
+  for (const grade of grades) {
+    for (const subject of subjects) {
+      for (const unit of curriculum[grade.id][subject.id]) {
+        for (const lesson of unit.lessons) out.push({ grade, subject, unit, lesson });
+      }
+    }
+  }
+  return out;
+}
+
+const lessonIds = new Set(allLessons().map((x) => x.lesson.id));
+
+export function lessonExists(id: string) {
+  return lessonIds.has(id);
+}
+
+/** Next lesson in the same grade and subject (crossing unit boundaries), if any. */
+export function getNextLesson(id: string): LessonLookup | null {
+  const current = findLesson(id);
+  const flat = curriculum[current.grade.id][current.subject.id].flatMap((unit) =>
+    unit.lessons.map((lesson) => ({ ...current, unit, lesson })),
+  );
+  const index = flat.findIndex((x) => x.lesson.id === current.lesson.id);
+  return flat[index + 1] ?? null;
 }
 
 export function countLessons(subject: SubjectId) {

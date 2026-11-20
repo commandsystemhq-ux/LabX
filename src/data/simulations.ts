@@ -14,7 +14,9 @@ export type SimKey =
   | "concentration"
   | "catalyst"
   | "gradient"
-  | "permeability";
+  | "permeability"
+  /** Injected real-world fault (0 = none). Meaning is defined per simulation in simExtras. */
+  | "fault";
 
 /** Every simulation reads from the same value bag; unused keys stay at 0. */
 export type SimValues = Record<SimKey, number>;
@@ -59,6 +61,10 @@ export interface QuizQuestion {
   demoNote: L10n;
   /** Optional stage view to switch to while demonstrating. */
   demoView?: "macro" | "molecular";
+  /** Readout key compared before/after in the demo (defaults to the first readout). */
+  focus?: string;
+  /** What a student who picked option N implicitly claims the focus readout becomes. */
+  claims?: Record<number, number>;
 }
 
 export interface ValueChange {
@@ -67,7 +73,7 @@ export interface ValueChange {
   to: number;
 }
 
-export type TutorIntent = "colloquial" | "why" | "example" | "mistake" | "free";
+export type TutorIntent = "colloquial" | "why" | "example" | "mistake" | "free" | "hint" | "hazard";
 
 export interface SimulationDef {
   id: SimulationId;
@@ -110,6 +116,7 @@ export function defaultsOf(sim: SimulationDef): SimValues {
     catalyst: 0,
     gradient: 0,
     permeability: 0,
+    fault: 0,
   };
   for (const v of sim.variables) base[v.key] = v.default;
   return base;
@@ -122,11 +129,19 @@ export function defaultsOf(sim: SimulationDef): SimValues {
 /** Temperature coefficient of resistance for copper-like conductor (1/°C). */
 export const ALPHA = 0.0039;
 
-export function computeOhm(voltage: number, resistance: number, temperature: number) {
-  const rEff = resistance * (1 + ALPHA * (temperature - 25));
+/** Source + wiring resistance left when the ammeter is wrongly wired in parallel (short circuit). */
+export const SHORT_CIRCUIT_R = 0.5;
+/** Extra series resistance of a loose / corroded connection. */
+export const LOOSE_CONTACT_R = 8;
+
+/** fault: 0 = none, 1 = short circuit (ammeter in parallel), 2 = loose connection. */
+export function computeOhm(voltage: number, resistance: number, temperature: number, fault = 0) {
+  const thermal = resistance * (1 + ALPHA * (temperature - 25));
+  const rEff = fault === 1 ? SHORT_CIRCUIT_R : fault === 2 ? thermal + LOOSE_CONTACT_R : thermal;
   const current = rEff > 0 ? voltage / rEff : 0;
   const power = voltage * current;
-  return { rEff, current, power };
+  const contactPower = fault === 2 ? current * current * LOOSE_CONTACT_R : 0;
+  return { rEff, current, power, contactPower };
 }
 
 const ohmVars: SimVariable[] = [
@@ -167,7 +182,7 @@ const ohm: SimulationDef = {
   subject: "physics",
   variables: ohmVars,
   readouts: (v) => {
-    const o = computeOhm(v.voltage, v.resistance, v.temperature);
+    const o = computeOhm(v.voltage, v.resistance, v.temperature, v.fault);
     return [
       {
         key: "current",
@@ -196,7 +211,7 @@ const ohm: SimulationDef = {
     ];
   },
   graph: (v) => {
-    const { rEff, current } = computeOhm(v.voltage, v.resistance, v.temperature);
+    const { rEff, current } = computeOhm(v.voltage, v.resistance, v.temperature, v.fault);
     const data = range(0, 24, 1).map((x) => ({ x, y: x / rEff, base: x / 10 }));
     const maxY = Math.max(...data.map((d) => Math.max(d.y, d.base)));
     return {
@@ -209,10 +224,11 @@ const ohm: SimulationDef = {
       yMax: niceCeil(maxY),
     };
   },
-  activity: (v) => clamp(computeOhm(v.voltage, v.resistance, v.temperature).current / 4, 0, 1),
+  activity: (v) =>
+    clamp(computeOhm(v.voltage, v.resistance, v.temperature, v.fault).current / 4, 0, 1),
   formula: "V = I × R",
   formulaLive: (v) => {
-    const o = computeOhm(v.voltage, v.resistance, v.temperature);
+    const o = computeOhm(v.voltage, v.resistance, v.temperature, v.fault);
     return `${f(v.voltage)} V = ${f(o.current, 2)} A × ${f(o.rEff)} Ω`;
   },
   story: {
@@ -262,6 +278,7 @@ const ohm: SimulationDef = {
         ar: "المقاومة بقت 20Ω بدل 10Ω — بص على الأميتر: التيار نزل من 1.2A لـ 0.6A.",
         en: "Resistance is now 20Ω instead of 10Ω — watch the ammeter drop from 1.2A to 0.6A.",
       },
+      claims: { 0: 2.4, 2: 1.2, 3: 0 },
     },
     {
       prompt: {
@@ -284,16 +301,42 @@ const ohm: SimulationDef = {
         en: "Temperature is now 125°C — in the molecular view, ions vibrate harder and current falls.",
       },
       demoView: "molecular",
+      claims: { 0: 1.5, 2: 1.2 },
+    },
+    {
+      prompt: {
+        ar: "وصّلنا الأميتر بالغلط على التوازي مع المصدر (قصر دائرة). إيه اللي هيحصل؟",
+        en: "The ammeter is wired in parallel with the source by mistake (short circuit). What happens?",
+      },
+      options: [
+        { ar: "التيار يقل لأن الدائرة اتقطعت", en: "Current drops — the circuit breaks" },
+        {
+          ar: "التيار يرتفع جداً والسلك والفيوز في خطر",
+          en: "Current spikes — wire and fuse at risk",
+        },
+        { ar: "مفيش تغيير", en: "Nothing changes" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "الأميتر مقاومته صغيرة جداً، فلما يتوصل على التوازي بيعمل ممر قصير والتيار يعلى بشكل خطير. الأميتر لازم يتوصل على التوالي.",
+        en: "An ammeter has tiny resistance; in parallel it creates a shortcut and current soars dangerously. Ammeters must be wired in series.",
+      },
+      demo: { voltage: 12, resistance: 10, temperature: 25, fault: 1 },
+      demoNote: {
+        ar: "قصر دائرة! المقاومة الفعلية بقت 0.5Ω والتيار قفز من 1.2A لـ 24A — ده كفاية يفصل الفيوز ويسخّن السلك.",
+        en: "Short circuit! Effective resistance is 0.5Ω and current jumped from 1.2A to 24A — enough to blow the fuse and overheat the wire.",
+      },
+      claims: { 0: 0.5, 2: 1.2 },
     },
   ],
   context: (v, lang) => {
-    const o = computeOhm(v.voltage, v.resistance, v.temperature);
+    const o = computeOhm(v.voltage, v.resistance, v.temperature, v.fault);
     return lang === "ar"
       ? `المقاومة = ${f(v.resistance, 0)}Ω • الجهد = ${f(v.voltage)}V • التيار = ${f(o.current, 2)}A`
       : `R = ${f(v.resistance, 0)}Ω • V = ${f(v.voltage)}V • I = ${f(o.current, 2)}A`;
   },
   tutor: (intent, v, lang, change) => {
-    const o = computeOhm(v.voltage, v.resistance, v.temperature);
+    const o = computeOhm(v.voltage, v.resistance, v.temperature, v.fault);
     const ar = lang === "ar";
     switch (intent) {
       case "colloquial":
@@ -349,8 +392,18 @@ const ohm: SimulationDef = {
 /* Chemistry — reaction rate (collision theory, Q10 ≈ 2)               */
 /* ------------------------------------------------------------------ */
 
-export function computeRate(temperature: number, concentration: number, catalyst: number) {
-  const rate = 5 * concentration * 2 ** ((temperature - 25) / 10) * (1 + 0.3 * catalyst);
+/** All-at-once mixing multiplies the initial rate (no gradual addition). */
+export const BURST_FACTOR = 3;
+
+/** fault: 0 = none, 1 = all reagent mixed at once, 2 = sealed vessel (rate unchanged, pressure builds). */
+export function computeRate(
+  temperature: number,
+  concentration: number,
+  catalyst: number,
+  fault = 0,
+) {
+  const burst = fault === 1 ? BURST_FACTOR : 1;
+  const rate = 5 * concentration * 2 ** ((temperature - 25) / 10) * (1 + 0.3 * catalyst) * burst;
   const k = concentration > 0 ? rate / concentration / 1000 : 0;
   const halfLife = k > 0 ? Math.LN2 / k : Infinity;
   const collisions = concentration * Math.sqrt((temperature + 273) / 298) * 100;
@@ -395,7 +448,7 @@ const reactionRate: SimulationDef = {
   subject: "chemistry",
   variables: rateVars,
   readouts: (v) => {
-    const r = computeRate(v.temperature, v.concentration, v.catalyst);
+    const r = computeRate(v.temperature, v.concentration, v.catalyst, v.fault);
     return [
       {
         key: "rate",
@@ -426,7 +479,7 @@ const reactionRate: SimulationDef = {
   graph: (v) => {
     const data = range(0, 100, 5).map((x) => ({
       x,
-      y: computeRate(x, v.concentration, v.catalyst).rate,
+      y: computeRate(x, v.concentration, v.catalyst, v.fault).rate,
       base: computeRate(x, 1, 0).rate,
     }));
     const maxY = Math.max(...data.map((d) => Math.max(d.y, d.base)));
@@ -436,19 +489,22 @@ const reactionRate: SimulationDef = {
       xUnit: "°C",
       yUnit: "mM/s",
       data,
-      point: { x: v.temperature, y: computeRate(v.temperature, v.concentration, v.catalyst).rate },
+      point: {
+        x: v.temperature,
+        y: computeRate(v.temperature, v.concentration, v.catalyst, v.fault).rate,
+      },
       yMax: niceCeil(maxY),
     };
   },
   activity: (v) =>
     clamp(
-      Math.log2(computeRate(v.temperature, v.concentration, v.catalyst).rate / 5 + 1) / 6,
+      Math.log2(computeRate(v.temperature, v.concentration, v.catalyst, v.fault).rate / 5 + 1) / 6,
       0.05,
       1,
     ),
   formula: "r = k [A]",
   formulaLive: (v) => {
-    const r = computeRate(v.temperature, v.concentration, v.catalyst);
+    const r = computeRate(v.temperature, v.concentration, v.catalyst, v.fault);
     return `${f(r.rate)} mM/s = k × ${f(v.concentration)} M`;
   },
   story: {
@@ -500,6 +556,7 @@ const reactionRate: SimulationDef = {
         ar: "الحرارة 35°C — لاحظ الفقاعات والتصادمات زادت للضعف تقريباً.",
         en: "Now at 35°C — bubbles and collisions roughly doubled.",
       },
+      claims: { 1: 5.5, 2: 2.5 },
     },
     {
       prompt: {
@@ -523,13 +580,39 @@ const reactionRate: SimulationDef = {
       },
       demoView: "molecular",
     },
+    {
+      prompt: {
+        ar: "سخّنا الخليط لـ 75°C وضفنا الكاشف كله مرة واحدة بدل التدريج. الأرجح إن…",
+        en: "We heated the mixture to 75°C and added all the reagent at once instead of gradually. Most likely…",
+      },
+      options: [
+        { ar: "السرعة تقل لأن الجزيئات اتزاحمت", en: "The rate drops — molecules get crowded" },
+        {
+          ar: "السرعة تقفز جداً والتفاعل يخرج عن السيطرة",
+          en: "The rate jumps and the reaction runs away",
+        },
+        { ar: "السرعة تفضل زي ما هي", en: "The rate stays the same" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "الحرارة العالية + الخلط دفعة واحدة بيضاعفوا التصادمات الفعّالة، فالتفاعل بيتسارع بشكل خطير. الإضافة التدريجية والتبريد هما الحل.",
+        en: "High temperature plus all-at-once mixing multiplies effective collisions, so the reaction accelerates dangerously. Gradual addition and cooling are the fix.",
+      },
+      demo: { temperature: 75, concentration: 1.5, catalyst: 0, fault: 1 },
+      demoNote: {
+        ar: "تفاعل جامح! السرعة قفزت من 5 لأكتر من 700 mM/s — فقاعات وضغط وطرطشة.",
+        en: "Runaway reaction! The rate jumped from 5 to over 700 mM/s — foaming, pressure and splashing.",
+      },
+      demoView: "molecular",
+      claims: { 0: 3, 2: 5 },
+    },
   ],
   context: (v, lang) =>
     lang === "ar"
       ? `الحرارة = ${f(v.temperature, 0)}°C • التركيز = ${f(v.concentration)}M`
       : `T = ${f(v.temperature, 0)}°C • C = ${f(v.concentration)}M`,
   tutor: (intent, v, lang, change) => {
-    const r = computeRate(v.temperature, v.concentration, v.catalyst);
+    const r = computeRate(v.temperature, v.concentration, v.catalyst, v.fault);
     const ar = lang === "ar";
     if (intent === "colloquial")
       return ar
@@ -563,11 +646,24 @@ const reactionRate: SimulationDef = {
 /* Biology — diffusion across a membrane (Fick's law)                  */
 /* ------------------------------------------------------------------ */
 
-export function computeDiffusion(temperature: number, gradient: number, permeability: number) {
-  const rate = (gradient / 100) * (permeability / 100) * ((temperature + 273) / 310) * 100;
+/** Above this temperature (°C) membrane proteins denature and the membrane turns leaky. */
+export const DENATURE_C = 50;
+
+/** fault: 0 = none, 1 = damaged (leaky) membrane, 2 = hypertonic surroundings (+40% gradient). */
+export function computeDiffusion(
+  temperature: number,
+  gradient: number,
+  permeability: number,
+  fault = 0,
+) {
+  const denatured = temperature >= DENATURE_C;
+  const leaky = fault === 1 || denatured;
+  const perm = leaky ? Math.min(100, permeability * 1.8 + 20) : permeability;
+  const grad = fault === 2 ? Math.min(100, gradient + 40) : gradient;
+  const rate = (grad / 100) * (perm / 100) * ((temperature + 273) / 310) * 100;
   const equilibrium = rate > 0.01 ? 60 / rate : Infinity;
   const crossing = rate * 0.6;
-  return { rate, equilibrium, crossing };
+  return { rate, equilibrium, crossing, leaky, denatured };
 }
 
 const diffVars: SimVariable[] = [
@@ -608,7 +704,7 @@ const diffusion: SimulationDef = {
   subject: "biology",
   variables: diffVars,
   readouts: (v) => {
-    const d = computeDiffusion(v.temperature, v.gradient, v.permeability);
+    const d = computeDiffusion(v.temperature, v.gradient, v.permeability, v.fault);
     return [
       {
         key: "rate",
@@ -639,7 +735,7 @@ const diffusion: SimulationDef = {
   graph: (v) => {
     const data = range(0, 100, 5).map((x) => ({
       x,
-      y: computeDiffusion(v.temperature, x, v.permeability).rate,
+      y: computeDiffusion(v.temperature, x, v.permeability, v.fault).rate,
       base: computeDiffusion(37, x, 60).rate,
     }));
     const maxY = Math.max(...data.map((d) => Math.max(d.y, d.base)));
@@ -649,15 +745,18 @@ const diffusion: SimulationDef = {
       xUnit: "%",
       yUnit: "µmol/s",
       data,
-      point: { x: v.gradient, y: computeDiffusion(v.temperature, v.gradient, v.permeability).rate },
+      point: {
+        x: v.gradient,
+        y: computeDiffusion(v.temperature, v.gradient, v.permeability, v.fault).rate,
+      },
       yMax: niceCeil(maxY),
     };
   },
   activity: (v) =>
-    clamp(computeDiffusion(v.temperature, v.gradient, v.permeability).rate / 60, 0, 1),
+    clamp(computeDiffusion(v.temperature, v.gradient, v.permeability, v.fault).rate / 60, 0, 1),
   formula: "J = P · ΔC",
   formulaLive: (v) => {
-    const d = computeDiffusion(v.temperature, v.gradient, v.permeability);
+    const d = computeDiffusion(v.temperature, v.gradient, v.permeability, v.fault);
     return `${f(d.rate)} = ${f(v.permeability / 100, 2)} × ${f(v.gradient, 0)}%`;
   },
   story: {
@@ -710,6 +809,7 @@ const diffusion: SimulationDef = {
         en: "Gradient is 0 — notice no net crossing through the membrane.",
       },
       demoView: "molecular",
+      claims: { 1: 45, 2: -30 },
     },
     {
       prompt: {
@@ -731,6 +831,33 @@ const diffusion: SimulationDef = {
         ar: "الحرارة 55°C — شوف الجزيئات بتعبر أسرع.",
         en: "Now 55°C — molecules cross faster.",
       },
+      claims: { 0: 15, 2: 30 },
+    },
+    {
+      prompt: {
+        ar: "غشاء الخلية اتلف وبقى مسرّب. تأثير ده على الانتشار؟",
+        en: "The cell membrane is damaged and leaky. What is the effect on diffusion?",
+      },
+      options: [
+        { ar: "الانتشار يقل لأن الغشاء ضعيف", en: "Diffusion slows — the membrane is weak" },
+        {
+          ar: "الجزيئات تعدّي بدون انتقائية والخلية تفقد محتوياتها",
+          en: "Molecules pass without selectivity and the cell loses its contents",
+        },
+        { ar: "مفيش تأثير", en: "No effect" },
+      ],
+      correct: 1,
+      explanation: {
+        ar: "الغشاء السليم بيتحكم في اللي يدخل ويخرج. لما يتلف النفاذية بتعلى والانتشار بيبقى خارج عن السيطرة.",
+        en: "A healthy membrane controls what crosses. When damaged, permeability rises and diffusion becomes uncontrolled.",
+      },
+      demo: { temperature: 37, gradient: 50, permeability: 60, fault: 1 },
+      demoNote: {
+        ar: "غشاء تالف! النفاذية الفعلية بقت 100% والمعدل قفز من 30 لـ 50 µmol/s بدون تحكم.",
+        en: "Damaged membrane! Effective permeability is 100% and the rate jumped from 30 to 50 µmol/s, uncontrolled.",
+      },
+      demoView: "molecular",
+      claims: { 0: 15, 2: 30 },
     },
   ],
   context: (v, lang) =>
@@ -738,7 +865,7 @@ const diffusion: SimulationDef = {
       ? `فرق التركيز = ${f(v.gradient, 0)}% • النفاذية = ${f(v.permeability, 0)}%`
       : `ΔC = ${f(v.gradient, 0)}% • P = ${f(v.permeability, 0)}%`,
   tutor: (intent, v, lang, change) => {
-    const d = computeDiffusion(v.temperature, v.gradient, v.permeability);
+    const d = computeDiffusion(v.temperature, v.gradient, v.permeability, v.fault);
     const ar = lang === "ar";
     if (intent === "colloquial")
       return ar

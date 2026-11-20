@@ -3,10 +3,15 @@ import { useLang } from "@/lib/i18n";
 import { frac, rand, type SceneProps, useIntegrated } from "./sceneUtils";
 
 /** Macro view: reacting liquid in a beaker on a hot plate; bubbles ∝ reaction rate. */
-export function BeakerScene({ t, values, activity, labels, flow }: SceneProps) {
+export function BeakerScene({ t, values, activity, labels, flow, hazard }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { rate } = computeRate(values.temperature, values.concentration, values.catalyst);
+  const { rate } = computeRate(
+    values.temperature,
+    values.concentration,
+    values.catalyst,
+    values.fault,
+  );
   const phase = useIntegrated(t, 0.25 + activity * 0.9);
   const heat = values.temperature / 100;
   const visible = Math.round(4 + activity * 34);
@@ -93,6 +98,25 @@ export function BeakerScene({ t, values, activity, labels, flow }: SceneProps) {
           />
         ))}
       </g>
+
+      {/* Hazard: foam overflowing the rim */}
+      {hazard > 0 &&
+        Array.from({ length: hazard === 2 ? 16 : 6 }, (_, i) => {
+          const p = frac(t * 0.7 + rand(i, 71));
+          return (
+            <circle
+              key={i}
+              cx={208 + rand(i, 72) * 184}
+              cy={72 - p * (hazard === 2 ? 60 : 26)}
+              r={3 + rand(i, 73) * 6}
+              fill="var(--foreground)"
+              fillOpacity={0.35 * (1 - p)}
+              stroke={hazard === 2 ? "var(--destructive)" : "var(--warning)"}
+              strokeOpacity={0.8 * (1 - p)}
+              strokeWidth="1.5"
+            />
+          );
+        })}
 
       {/* Beaker glass */}
       <path

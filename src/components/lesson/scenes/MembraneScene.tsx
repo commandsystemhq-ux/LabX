@@ -6,7 +6,12 @@ import { frac, rand, type SceneProps, tri, useIntegrated } from "./sceneUtils";
 export function MembraneScene({ t, values, activity, labels, flow }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { crossing } = computeDiffusion(values.temperature, values.gradient, values.permeability);
+  const { crossing } = computeDiffusion(
+    values.temperature,
+    values.gradient,
+    values.permeability,
+    values.fault,
+  );
   const thermal = useIntegrated(t, 0.12 + (values.temperature / 60) * 0.25);
   const cross = useIntegrated(t, 0.08 + activity * 0.4);
   const channels = values.permeability <= 0 ? 0 : 1 + Math.round((values.permeability / 100) * 4);

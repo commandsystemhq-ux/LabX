@@ -1,55 +1,39 @@
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, Eye, RotateCcw, Trophy, XCircle } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, RotateCcw, Trophy, XCircle } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import type { LessonLookup } from "@/data/mockCurriculum";
+import { buildComparison } from "@/data/quizCompare";
 import type { QuizQuestion, SimulationDef } from "@/data/simulations";
 import { useLang } from "@/lib/i18n";
+import { ComparisonBars } from "./ComparisonBars";
+import type { QuizApi } from "./useQuiz";
 
 interface Props {
   sim: SimulationDef;
-  onSeeMistake: (q: QuizQuestion) => void;
+  lookup: LessonLookup;
+  quiz: QuizApi;
+  onSeeMistake: (q: QuizQuestion, chosen: number) => void;
+  xpGained: number;
+  nextLesson: LessonLookup | null;
 }
 
-export function QuizView({ sim, onSeeMistake }: Props) {
-  const { t, l, lang } = useLang();
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
-  const [missed, setMissed] = useState(false);
-  const [done, setDone] = useState(false);
+export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson }: Props) {
+  const { t, l, lang, dir } = useLang();
+  const Forward = dir === "rtl" ? ArrowLeft : ArrowRight;
+  const { index, selected, score, done } = quiz.state;
 
   const q = sim.quiz[index] ?? sim.quiz[0]!;
   const answered = selected !== null;
   const correct = answered && selected === q.correct;
-
-  const choose = (i: number) => {
-    if (answered) return;
-    setSelected(i);
-    if (i === q.correct && !missed) setScore((s) => s + 1);
-    if (i !== q.correct) setMissed(true);
-  };
-
-  const next = () => {
-    if (index + 1 >= sim.quiz.length) {
-      setDone(true);
-      return;
-    }
-    setIndex(index + 1);
-    setSelected(null);
-    setMissed(false);
-  };
-
-  const restart = () => {
-    setIndex(0);
-    setSelected(null);
-    setScore(0);
-    setMissed(false);
-    setDone(false);
-  };
+  const comparison = useMemo(
+    () => (answered && !correct ? buildComparison(sim, q, selected) : null),
+    [sim, q, answered, correct, selected],
+  );
 
   if (done) {
     return (
-      <div className="glass flex min-h-[420px] flex-col items-center justify-center rounded-3xl p-8 text-center lg:h-[min(64vh,640px)]">
+      <div className="glass flex min-h-[420px] flex-col items-center justify-center rounded-3xl p-8 text-center lg:min-h-[min(64vh,640px)]">
         <span className="flex size-16 items-center justify-center rounded-3xl bg-gradient-subject text-primary-foreground glow-subject">
           <Trophy className="size-8" />
         </span>
@@ -57,13 +41,23 @@ export function QuizView({ sim, onSeeMistake }: Props) {
         <p className="mt-2 font-mono text-4xl font-black text-subject">
           {score}/{sim.quiz.length}
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">+{score * 25} XP</p>
+        <p className="mt-2 text-sm text-muted-foreground">+{xpGained} XP</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("progressSaved")}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Button variant="subject-soft" className="rounded-full" onClick={restart}>
+          <Button variant="subject-soft" className="rounded-full" onClick={quiz.restart}>
             <RotateCcw /> {t("restartQuiz")}
           </Button>
-          <Button asChild variant="subject" className="rounded-full">
-            <Link to="/dashboard">{t("backToDashboard")}</Link>
+          {nextLesson && (
+            <Button asChild variant="subject" className="rounded-full">
+              <Link to="/lesson" search={{ id: nextLesson.lesson.id }}>
+                {t("nextLesson")} <Forward />
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant={nextLesson ? "glass" : "subject"} className="rounded-full">
+            <Link to="/dashboard" search={{ grade: lookup.grade.id, subject: lookup.subject.id }}>
+              {t("backToDashboard")}
+            </Link>
           </Button>
         </div>
       </div>
@@ -71,7 +65,7 @@ export function QuizView({ sim, onSeeMistake }: Props) {
   }
 
   return (
-    <div className="glass relative flex min-h-[420px] flex-col overflow-hidden rounded-3xl p-5 sm:p-8 lg:h-[min(64vh,640px)]">
+    <div className="glass relative flex min-h-[420px] flex-col overflow-hidden rounded-3xl p-5 sm:p-8 lg:min-h-[min(64vh,640px)]">
       <div className="absolute -top-24 size-64 rounded-full bg-subject/15 blur-3xl end-0" />
       <div className="relative flex items-center justify-between">
         <p className="font-mono text-xs uppercase tracking-widest text-subject">
@@ -98,7 +92,7 @@ export function QuizView({ sim, onSeeMistake }: Props) {
             <button
               key={i}
               type="button"
-              onClick={() => choose(i)}
+              onClick={() => quiz.choose(i, q.correct)}
               disabled={answered}
               className={
                 "flex items-center gap-3 rounded-2xl border p-4 text-start text-sm font-semibold transition-all " +
@@ -141,7 +135,11 @@ export function QuizView({ sim, onSeeMistake }: Props) {
         <div className="relative mt-6 animate-fade-up rounded-2xl border border-bio/40 bg-bio/10 p-4">
           <p className="font-bold text-bio">{t("correct")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{l(q.explanation)}</p>
-          <Button variant="subject" className="mt-4 rounded-full" onClick={next}>
+          <Button
+            variant="subject"
+            className="mt-4 rounded-full"
+            onClick={() => quiz.next(sim.quiz.length)}
+          >
             {t("next")}
           </Button>
         </div>
@@ -151,19 +149,24 @@ export function QuizView({ sim, onSeeMistake }: Props) {
         <div className="relative mt-6 animate-fade-up rounded-2xl border border-warning/50 bg-warning/10 p-4">
           <p className="font-bold text-warning">{t("wrong")}</p>
           <p className="mt-1 text-sm text-muted-foreground">{l(q.explanation)}</p>
+          {comparison && (
+            <div className="mt-3">
+              <ComparisonBars cmp={comparison} compact />
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
-                setSelected(null);
-                onSeeMistake(q);
+                if (selected !== null) onSeeMistake(q, selected);
+                quiz.clear();
               }}
               className="flex animate-pulse-ring items-center gap-2 rounded-full bg-warning px-4 py-2.5 text-sm font-bold text-primary-foreground transition hover:brightness-110"
             >
               <Eye className="size-4" />
               {t("seeMistake")}
             </button>
-            <Button variant="glass" className="rounded-full" onClick={() => setSelected(null)}>
+            <Button variant="glass" className="rounded-full" onClick={quiz.clear}>
               <RotateCcw /> {t("tryAgain")}
             </Button>
           </div>

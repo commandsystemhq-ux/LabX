@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { HazardLevel } from "@/data/simExtras";
 import type { SimValues } from "@/data/simulations";
 
 export interface SceneProps {
@@ -9,6 +10,10 @@ export interface SceneProps {
   activity: number;
   labels: boolean;
   flow: boolean;
+  /** Subject-specific layer toggles (see `extras[sim].layers`). */
+  layers: Record<string, boolean>;
+  /** Worst active hazard: 0 none, 1 warning, 2 critical. */
+  hazard: HazardLevel;
 }
 
 /** Deterministic pseudo-random in [0, 1). */

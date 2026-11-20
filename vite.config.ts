@@ -3,11 +3,11 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { nitro } from "nitro/vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig(({ command }) => ({
   server: { host: "::", port: 8080 },
   resolve: {
+    tsconfigPaths: true,
     dedupe: [
       "react",
       "react-dom",
@@ -19,7 +19,6 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [
     tailwindcss(),
-    tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
       importProtection: {
         behavior: "error",

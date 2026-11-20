@@ -6,7 +6,12 @@ import { frac, rand, type SceneProps, useIntegrated } from "./sceneUtils";
 export function LatticeScene({ t, values, labels, flow }: SceneProps) {
   const { lang } = useLang();
   const ar = lang === "ar";
-  const { current } = computeOhm(values.voltage, values.resistance, values.temperature);
+  const { current } = computeOhm(
+    values.voltage,
+    values.resistance,
+    values.temperature,
+    values.fault,
+  );
   const drift = useIntegrated(t, Math.min(current * 0.06, 0.8));
   const amp = 1.5 + (values.temperature / 150) * 9;
   const cols = 9;

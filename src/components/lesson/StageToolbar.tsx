@@ -1,13 +1,12 @@
 import { Eye, Layers, Pause, Play, RotateCcw, ZoomIn } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Slider } from "@/components/ui/slider";
+import type { LayerDef } from "@/data/simExtras";
 import { useLang } from "@/lib/i18n";
 import type { StageView } from "./scenes";
 
-export interface StageLayers {
-  labels: boolean;
-  flow: boolean;
-}
+/** Layer id → visible. Ids come from `extras[sim].layers`. */
+export type StageLayers = Record<string, boolean>;
 
 interface Props {
   playing: boolean;
@@ -15,6 +14,7 @@ interface Props {
   speed: number;
   onSpeed: (v: number) => void;
   onReset: () => void;
+  layerDefs: LayerDef[];
   layers: StageLayers;
   onLayers: (l: StageLayers) => void;
   view: StageView;
@@ -25,7 +25,7 @@ const iconBtn =
   "flex size-9 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function StageToolbar(p: Props) {
-  const { t, dir } = useLang();
+  const { t, l, dir } = useLang();
   const [layersOpen, setLayersOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -90,16 +90,16 @@ export function StageToolbar(p: Props) {
         </button>
         {layersOpen && (
           <div className="glass-strong absolute bottom-full z-20 mb-2 w-52 animate-fade-up rounded-xl p-1.5 start-1/2 -translate-x-1/2 rtl:translate-x-1/2">
-            {(["labels", "flow"] as const).map((k) => (
+            {p.layerDefs.map((def) => (
               <label
-                key={k}
+                key={def.id}
                 className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent"
               >
-                {t(k === "labels" ? "labelsLayer" : "flowLayer")}
+                {l(def.label)}
                 <input
                   type="checkbox"
-                  checked={p.layers[k]}
-                  onChange={(e) => p.onLayers({ ...p.layers, [k]: e.target.checked })}
+                  checked={p.layers[def.id] ?? false}
+                  onChange={(e) => p.onLayers({ ...p.layers, [def.id]: e.target.checked })}
                   className="size-4 accent-[var(--subject)]"
                 />
               </label>

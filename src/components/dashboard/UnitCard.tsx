@@ -1,18 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, Clock, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Lesson, Unit } from "@/data/mockCurriculum";
+import { unitMastery, type Lesson, type Unit } from "@/data/mockCurriculum";
 import { useLang } from "@/lib/i18n";
+import { useMastery } from "@/lib/use-progress";
 
-function status(lesson: Lesson) {
-  if (lesson.mastery >= 85) return "mastered" as const;
-  if (lesson.mastery > 0) return "inProgress" as const;
+function status(mastery: number) {
+  if (mastery >= 85) return "mastered" as const;
+  if (mastery > 0) return "inProgress" as const;
   return "notStarted" as const;
 }
 
-function LessonRow({ lesson, index }: { lesson: Lesson; index: number }) {
+function LessonRow({ lesson, index, mastery }: { lesson: Lesson; index: number; mastery: number }) {
   const { l, t } = useLang();
-  const s = status(lesson);
+  const s = status(mastery);
   const ActionIcon = s === "mastered" ? RotateCcw : PlayCircle;
   const action = s === "mastered" ? t("review") : s === "inProgress" ? t("continue") : t("launch");
 
@@ -56,12 +57,12 @@ function LessonRow({ lesson, index }: { lesson: Lesson; index: number }) {
         <div className="flex-1">
           <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
             <span>{t("mastery")}</span>
-            <span className="font-mono font-bold text-foreground">{lesson.mastery}%</span>
+            <span className="font-mono font-bold text-foreground">{mastery}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-gradient-subject transition-[width] duration-700"
-              style={{ width: `${lesson.mastery}%` }}
+              style={{ width: `${mastery}%` }}
             />
           </div>
         </div>
@@ -83,7 +84,8 @@ function LessonRow({ lesson, index }: { lesson: Lesson; index: number }) {
 
 export function UnitCard({ unit, index }: { unit: Unit; index: number }) {
   const { l, lang, t } = useLang();
-  const avg = Math.round(unit.lessons.reduce((s, x) => s + x.mastery, 0) / unit.lessons.length);
+  const masteryOf = useMastery();
+  const avg = unitMastery(unit, masteryOf);
   return (
     <article
       className="glass animate-fade-up rounded-3xl p-4 sm:p-5"
@@ -105,7 +107,7 @@ export function UnitCard({ unit, index }: { unit: Unit; index: number }) {
       </header>
       <ul className="flex flex-col gap-1">
         {unit.lessons.map((lesson, i) => (
-          <LessonRow key={lesson.id} lesson={lesson} index={i} />
+          <LessonRow key={lesson.id} lesson={lesson} index={i} mastery={masteryOf(lesson)} />
         ))}
       </ul>
     </article>
