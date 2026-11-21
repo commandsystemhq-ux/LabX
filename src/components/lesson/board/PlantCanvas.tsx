@@ -594,7 +594,7 @@ export default function PlantCanvas({ focus, scene, ar, labels }: PlantCanvasPro
   };
   const dist = focus === "stem" ? 7.5 : focus === "tissues" ? 6.5 : 6.2;
   return (
-    <div className="relative h-full min-h-[320px] w-full touch-none overflow-hidden rounded-2xl bg-gradient-to-b from-emerald-950 to-slate-900">
+    <div className="relative h-full min-h-80 w-full touch-none overflow-hidden rounded-2xl bg-linear-to-b from-emerald-950 to-slate-900">
       <Canvas
         key={focus}
         camera={{ fov: 40, near: 0.1, far: 80, position: [0, 0.6, dist] }}
@@ -625,7 +625,7 @@ export default function PlantCanvas({ focus, scene, ar, labels }: PlantCanvasPro
       </Canvas>
       <LabelOverlay reg={reg} />
       {focus === "tissues" && (
-        <div className="absolute start-2 top-2 flex flex-wrap gap-1" dir={ar ? "rtl" : "ltr"}>
+        <div className="absolute inset-s-2 top-2 flex flex-wrap gap-1" dir={ar ? "rtl" : "ltr"}>
           {TISSUES.map((k) => (
             <button
               key={k}

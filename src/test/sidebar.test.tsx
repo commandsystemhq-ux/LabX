@@ -107,14 +107,14 @@ describe("Collapsible sidebar", () => {
     // Two buttons share the label: the page-level one and the one in the sidebar header.
     expect(screen.getAllByRole("button", { name: "طي الشريط الجانبي" })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole("button", { name: "طي الشريط الجانبي" })[0]!);
-    expect(side().className).toContain("lg:w-[4.5rem]");
+    expect(side().className).toContain("lg:w-18");
     expect(window.localStorage.getItem(KEY)).toBe("0");
     // Collapsed still exposes accessible names for the icons.
     expect(within(side()).getByRole("link", { name: "لوحة المنهج والدروس" })).toBeTruthy();
 
     cleanup();
     await mount("/dashboard");
-    expect(side().className).toContain("lg:w-[4.5rem]");
+    expect(side().className).toContain("lg:w-18");
 
     fireEvent.click(screen.getAllByRole("button", { name: "فتح الشريط الجانبي" })[0]!);
     expect(side().className).toContain("lg:w-64");
@@ -129,7 +129,7 @@ describe("Collapsible sidebar", () => {
     cleanup();
     window.localStorage.clear();
     await mount("/lesson");
-    expect(screen.getByRole("complementary").className).toContain("lg:w-[4.5rem]");
+    expect(screen.getByRole("complementary").className).toContain("lg:w-18");
 
     cleanup();
     window.localStorage.setItem(KEY, "1");

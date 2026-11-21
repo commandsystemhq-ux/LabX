@@ -932,7 +932,7 @@ export default function BoneCanvas(props: BoneCanvasProps) {
   useEffect(() => () => void (document.body.style.cursor = ""), []);
 
   return (
-    <div className="relative h-full min-h-[320px] w-full touch-none overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-800">
+    <div className="relative h-full min-h-80 w-full touch-none overflow-hidden rounded-2xl bg-linear-to-b from-slate-900 to-slate-800">
       <Canvas
         camera={{ fov: 38, near: 0.01, far: 140, position: [0, 0.4, 9] }}
         dpr={[1, 1.6]}
@@ -952,7 +952,7 @@ export default function BoneCanvas(props: BoneCanvasProps) {
         />
       </Canvas>
       <LabelOverlay reg={reg} />
-      <div className="absolute start-2 top-2 flex gap-1" dir={props.ar ? "rtl" : "ltr"}>
+      <div className="absolute inset-s-2 top-2 flex gap-1" dir={props.ar ? "rtl" : "ltr"}>
         {plan.dirs.map((d) => (
           <button
             key={d}

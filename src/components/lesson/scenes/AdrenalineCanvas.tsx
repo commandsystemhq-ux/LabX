@@ -294,7 +294,7 @@ function LoadingBadge({ ar }: { ar: boolean }) {
   return (
     <p
       role="status"
-      className="pointer-events-none absolute start-2 top-7 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-sky-100"
+      className="pointer-events-none absolute inset-s-2 top-7 rounded-full bg-black/60 px-3 py-1 text-[11px] font-semibold text-sky-100"
     >
       {t(T.loading, ar)} {Math.round(progress)}%
     </p>
@@ -446,7 +446,7 @@ const AdrenalineCanvas = memo(function AdrenalineCanvas(props: AdrenalineCanvasP
         <div
           role="group"
           aria-label={t(T.layers, ar)}
-          className="absolute end-1.5 top-6 flex flex-col gap-1"
+          className="absolute inset-e-1.5 top-6 flex flex-col gap-1"
         >
           {LAYERS.map((layer) => (
             <button
@@ -470,7 +470,7 @@ const AdrenalineCanvas = memo(function AdrenalineCanvas(props: AdrenalineCanvasP
       )}
 
       {picked && pickedName && !ride && (
-        <div className="absolute start-1.5 top-6 max-w-[15rem] rounded-xl border border-sky-300/40 bg-black/75 p-2.5 text-xs backdrop-blur-md">
+        <div className="absolute inset-s-1.5 top-6 max-w-60 rounded-xl border border-sky-300/40 bg-black/75 p-2.5 text-xs backdrop-blur-md">
           <p className="font-bold text-sky-100">{t(pickedName, ar)}</p>
           <p className="text-white/60">{t(categoryName(picked.file), ar)}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -509,7 +509,7 @@ const AdrenalineCanvas = memo(function AdrenalineCanvas(props: AdrenalineCanvasP
           onClick={() => {
             burst.current = 1;
           }}
-          className="absolute start-1.5 bottom-12 rounded-full border border-amber-300/60 bg-amber-400/25 px-3 py-1.5 text-xs font-bold text-amber-50 backdrop-blur-md"
+          className="absolute inset-s-1.5 bottom-12 rounded-full border border-amber-300/60 bg-amber-400/25 px-3 py-1.5 text-xs font-bold text-amber-50 backdrop-blur-md"
         >
           ⚡ {t(T.secrete, ar)}
         </button>

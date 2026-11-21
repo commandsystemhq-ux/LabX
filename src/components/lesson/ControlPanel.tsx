@@ -194,7 +194,7 @@ export function ControlPanel({
               className="rounded-xl border border-border bg-background/40 px-3 py-2"
             >
               <p className="text-[11px] text-muted-foreground">{c.label}</p>
-              <p className="mt-0.5 break-words font-mono text-xs font-semibold" dir="ltr">
+              <p className="mt-0.5 wrap-break-word font-mono text-xs font-semibold" dir="ltr">
                 {c.expr}
               </p>
             </li>

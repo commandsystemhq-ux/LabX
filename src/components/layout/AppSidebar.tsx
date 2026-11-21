@@ -105,7 +105,7 @@ function AppSidebar({ pathname }: { pathname: string }) {
         <div
           aria-hidden
           onClick={closeMobile}
-          className="fixed inset-0 z-[45] bg-background/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-45 bg-background/70 backdrop-blur-sm lg:hidden"
         />
       )}
       <aside
@@ -114,12 +114,12 @@ function AppSidebar({ pathname }: { pathname: string }) {
         inert={!isDesktop && !mobileOpen}
         className={
           "glass-strong z-50 flex flex-col border-e border-border/60 transition-[width,transform] duration-300 " +
-          "max-lg:fixed max-lg:inset-y-0 max-lg:start-0 max-lg:w-72 " +
+          "max-lg:fixed max-lg:inset-y-0 max-lg:inset-s-0 max-lg:w-72 " +
           (mobileOpen
             ? "max-lg:translate-x-0 "
             : "max-lg:-translate-x-full max-lg:rtl:translate-x-full ") +
           "lg:sticky lg:top-0 lg:h-dvh lg:shrink-0 " +
-          (expanded ? "lg:w-64" : "lg:w-[4.5rem]")
+          (expanded ? "lg:w-64" : "lg:w-18")
         }
       >
         <div

@@ -29,6 +29,11 @@ import {
 import type { TutorIntent } from "@/data/simulations";
 import { buildTutorReply, detectIntent, MAX_QUESTION_LENGTH } from "@/data/tutor";
 import { requestAiReply } from "@/lib/ai-tutor-client";
+import { parseStudioRequest, type StudioFocus, type StudioIntent } from "@/data/lessons/noorStudio";
+import { loadRadar } from "@/data/lessons/supportRadar";
+import { SUPPORT_LESSON_ID } from "@/data/lessons/supportTypes";
+import { runNoorStudio } from "@/lib/noor-studio-flow";
+import { studioStore } from "@/lib/use-noor-studio";
 import { useAuth } from "@/lib/auth";
 import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
 import { chatContext, type SavedChat } from "@/lib/noor-chat";
@@ -49,8 +54,10 @@ import {
   useNoorOpen,
   useNoorRequest,
   useNoorSupport,
+  useStudioFocus,
 } from "./NoorProvider";
 import { NoorSavedChats } from "./NoorSavedChats";
+import { NoorStudioBar, NoorStudioCard } from "./NoorStudio";
 
 const SAVE_NOTE_KEYS: Record<SaveResult | "already", UiKey> = {
   ok: "noorSavedOk",
@@ -100,7 +107,8 @@ function Chip({
 export function NoorAssistant() {
   const { t, l, lang } = useLang();
   const open = useNoorOpen();
-  const { setOpen } = useNoorControl();
+  const { setOpen, openStudio, setStudioFocus } = useNoorControl();
+  const studioFocus = useStudioFocus();
   const lessonCtx = useNoorLesson();
   const supportCtx = useNoorSupport();
   const request = useNoorRequest();
@@ -164,8 +172,8 @@ export function NoorAssistant() {
   const runRef = useRef(0);
 
   // Latest state, read when a (possibly delayed) reply is produced.
-  const live = useRef({ lang, lesson, support, platform, stats, progress });
-  live.current = { lang, lesson, support, platform, stats, progress };
+  const live = useRef({ lang, lesson, support, platform, stats, progress, studioFocus });
+  live.current = { lang, lesson, support, platform, stats, progress, studioFocus };
 
   // A different account (or sign-out) must not receive a reply that was still in flight.
   useEffect(() => {
@@ -195,7 +203,14 @@ export function NoorAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typing]);
 
-  const send = (text: string, hint?: { platform?: PlatformIntent; lesson?: TutorIntent }) => {
+  const send = (
+    text: string,
+    hint?: {
+      platform?: PlatformIntent;
+      lesson?: TutorIntent;
+      studio?: { intent: StudioIntent; target: StudioFocus | null };
+    },
+  ) => {
     if (typing) return;
     const memory = chatContext(chat.messagesRef.current);
     chat.append({ role: "student", text });
@@ -209,7 +224,22 @@ export function NoorAssistant() {
       let reply: { text: string; actions: NoorAction[] };
       let aiAnswered = false;
 
-      if (platformIntent) {
+      if (hint?.studio) {
+        // Noor Studio: build/edit a map or cards, save them in this account, answer with an open button.
+        const accessToken = user ? await getAccessToken() : null;
+        const result = await runNoorStudio({
+          intent: hint.studio.intent,
+          target: hint.studio.target ?? snap.studioFocus,
+          userId: user?.id ?? null,
+          lang: snap.lang,
+          accessToken,
+          radar: loadRadar(typeof window === "undefined" ? null : window.localStorage),
+          store: studioStore,
+        });
+        if (run === runRef.current && result.focus) setStudioFocus(result.focus);
+        reply = { text: result.text, actions: result.actions };
+        aiAnswered = true;
+      } else if (platformIntent) {
         reply = buildPlatformReply(platformIntent, text, snap.platform, snap.stats, snap.progress);
       } else {
         const lessonIntent = hint?.lesson ?? detectIntent(text);
@@ -323,7 +353,28 @@ export function NoorAssistant() {
   useEffect(() => {
     if (!request || request.id === handled.current) return;
     handled.current = request.id;
-    sendRef.current(request.text.slice(0, MAX_QUESTION_LENGTH), { lesson: "free" });
+    const text = request.text.slice(0, MAX_QUESTION_LENGTH);
+    // Only requests that opt in are read as Studio commands (a flashcard «explain» prompt is not one).
+    const forced = request.studio ?? null;
+    const detected =
+      forced || request.detect
+        ? parseStudioRequest(text, forced ?? live.current.studioFocus)
+        : null;
+    const studio =
+      detected ??
+      (forced
+        ? {
+            action: "edit" as const,
+            kind: forced.kind,
+            blank: false,
+            weak: false,
+            request: text,
+          }
+        : null);
+    sendRef.current(
+      text,
+      studio ? { lesson: "free", studio: { intent: studio, target: forced } } : { lesson: "free" },
+    );
   }, [request]);
 
   const submit = (e: FormEvent) => {
@@ -331,7 +382,8 @@ export function NoorAssistant() {
     const q = input.trim().slice(0, MAX_QUESTION_LENGTH);
     if (!q) return;
     setInput("");
-    send(q);
+    const studio = parseStudioRequest(q, live.current.studioFocus);
+    send(q, studio ? { studio: { intent: studio, target: live.current.studioFocus } } : undefined);
   };
 
   const go = (a: NoorAction) => {
@@ -353,6 +405,13 @@ export function NoorAssistant() {
         break;
       case "auth":
         void navigate({ to: "/auth", search: { mode: a.mode } });
+        break;
+      case "studio":
+        // The live board owns the Labs: open the request there (going to the lesson first if needed).
+        openStudio(a.studio, a.id);
+        if (!support && lessonExists(SUPPORT_LESSON_ID)) {
+          void navigate({ to: "/lesson", search: { id: SUPPORT_LESSON_ID } });
+        }
         break;
     }
     setOpen(false);
@@ -379,7 +438,7 @@ export function NoorAssistant() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 end-4 z-40 flex animate-pulse-ring items-center gap-2 rounded-full bg-subject px-4 py-3 text-sm font-bold text-primary-foreground shadow-[var(--shadow-glow)] transition hover:brightness-110"
+          className="fixed bottom-4 inset-e-4 z-40 flex animate-pulse-ring items-center gap-2 rounded-full bg-subject px-4 py-3 text-sm font-bold text-primary-foreground shadow-(--shadow-glow) transition hover:brightness-110"
         >
           <Bot className="size-5" />
           {t("aiTutor")}
@@ -391,14 +450,14 @@ export function NoorAssistant() {
         aria-hidden={!open}
         inert={!open}
         className={
-          "glass-strong fixed inset-x-2 bottom-2 z-50 flex h-[72dvh] flex-col overflow-hidden rounded-3xl transition-all duration-300 sm:inset-x-auto sm:end-4 sm:bottom-4 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-[400px] " +
+          "glass-strong fixed inset-x-2 bottom-2 z-50 flex h-[72dvh] flex-col overflow-hidden rounded-3xl transition-all duration-300 sm:inset-x-auto sm:inset-e-4 sm:bottom-4 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-100 " +
           (open ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-8 opacity-0")
         }
       >
         <header className="flex items-center gap-3 border-b border-border p-4">
           <span className="relative flex size-10 items-center justify-center rounded-2xl bg-gradient-subject text-primary-foreground">
             <Bot className="size-5" />
-            <span className="absolute -bottom-0.5 -end-0.5 size-3 rounded-full border-2 border-surface bg-bio" />
+            <span className="absolute -bottom-0.5 -inset-e-0.5 size-3 rounded-full border-2 border-surface bg-bio" />
           </span>
           <div className="flex-1">
             <p className="font-bold">{t("aiTutor")}</p>
@@ -472,6 +531,16 @@ export function NoorAssistant() {
           />
         )}
 
+        {!showSaved && (
+          <NoorStudioBar
+            lang={lang}
+            busy={typing}
+            block={support?.ctx.block ?? null}
+            focus={studioFocus}
+            onRun={(text, intent) => send(text, { studio: { intent, target: studioFocus } })}
+          />
+        )}
+
         <div className={"border-b border-border px-4 py-2.5 " + (showSaved ? "hidden" : "")}>
           <div className="flex items-start gap-2 rounded-xl border border-subject/30 bg-subject/10 px-3 py-2 text-xs">
             <MapPin className="mt-0.5 size-3.5 shrink-0 text-subject" />
@@ -532,7 +601,7 @@ export function NoorAssistant() {
               }
             >
               {m.role === "student" ? (
-                <p className="max-w-[85%] whitespace-pre-line break-words rounded-2xl rounded-ee-md bg-subject px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
+                <p className="max-w-[85%] whitespace-pre-line wrap-break-word rounded-2xl rounded-ee-md bg-subject px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground">
                   {m.text}
                 </p>
               ) : (
@@ -542,16 +611,20 @@ export function NoorAssistant() {
               )}
               {m.actions && (
                 <div className="flex max-w-[92%] flex-wrap gap-1.5">
-                  {m.actions.map((a, j) => (
-                    <button
-                      key={j}
-                      type="button"
-                      onClick={() => go(a)}
-                      className="rounded-full border border-subject/40 bg-subject/10 px-3 py-1.5 text-xs font-semibold text-subject transition hover:bg-subject/20"
-                    >
-                      {actionLabel(a, lang)}
-                    </button>
-                  ))}
+                  {m.actions.map((a, j) =>
+                    a.kind === "studio" ? (
+                      <NoorStudioCard key={j} action={a} lang={lang} onOpen={go} />
+                    ) : (
+                      <button
+                        key={j}
+                        type="button"
+                        onClick={() => go(a)}
+                        className="rounded-full border border-subject/40 bg-subject/10 px-3 py-1.5 text-xs font-semibold text-subject transition hover:bg-subject/20"
+                      >
+                        {actionLabel(a, lang)}
+                      </button>
+                    ),
+                  )}
                 </div>
               )}
             </div>

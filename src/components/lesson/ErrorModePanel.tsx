@@ -41,7 +41,7 @@ export function ErrorModePanel({ sim, values, enabled, hazards, onEnabled, onFau
           <span
             className={
               "absolute top-0.5 size-4 rounded-full bg-background shadow transition-all " +
-              (enabled ? "end-0.5" : "start-0.5")
+              (enabled ? "inset-e-0.5" : "inset-s-0.5")
             }
           />
         </button>

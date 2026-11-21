@@ -89,7 +89,7 @@ export function StageToolbar(p: Props) {
           <Layers className="size-4" />
         </button>
         {layersOpen && (
-          <div className="glass-strong absolute bottom-full z-20 mb-2 w-52 animate-fade-up rounded-xl p-1.5 start-1/2 -translate-x-1/2 rtl:translate-x-1/2">
+          <div className="glass-strong absolute bottom-full z-20 mb-2 w-52 animate-fade-up rounded-xl p-1.5 inset-s-1/2 -translate-x-1/2 rtl:translate-x-1/2">
             {p.layerDefs.map((def) => (
               <label
                 key={def.id}
@@ -100,7 +100,7 @@ export function StageToolbar(p: Props) {
                   type="checkbox"
                   checked={p.layers[def.id] ?? false}
                   onChange={(e) => p.onLayers({ ...p.layers, [def.id]: e.target.checked })}
-                  className="size-4 accent-[var(--subject)]"
+                  className="size-4 accent-subject"
                 />
               </label>
             ))}

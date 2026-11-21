@@ -1,29 +1,33 @@
 import {
+  AlertTriangle,
+  Check,
   ChevronLeft,
   ChevronRight,
-  RotateCw,
-  Check,
-  AlertTriangle,
-  X,
   ExternalLink,
   Eye,
   EyeOff,
+  Pencil,
+  RotateCw,
   Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNoorControl } from "@/components/noor/NoorProvider";
+import { packToFlashcards, removeFlashcardPack } from "@/data/lessons/noorStudio";
+import { getFigure } from "@/data/lessons/supportFigures";
 import {
-  supportFlashcards,
-  loadFlashcardState,
-  saveFlashcardState,
-  rateCard,
   getDueCards,
+  loadFlashcardState,
   masteryPercentage,
+  rateCard,
+  saveFlashcardState,
+  supportFlashcards,
 } from "@/data/lessons/supportFlashcards";
 import type { Flashcard, FlashcardRating, FlashcardState } from "@/data/lessons/supportTypes";
 import { useLang, type L10n } from "@/lib/i18n";
-import { getFigure } from "@/data/lessons/supportFigures";
+import { useNoorStudio } from "@/lib/use-noor-studio";
 import { FigureSvg } from "./FigureSvg";
-import { useNoorControl } from "@/components/noor/NoorProvider";
 
 const t = (ar: string, en: string): L10n => ({ ar, en });
 
@@ -37,17 +41,34 @@ const ui = {
   goToBlock: t("جرّبها في السبورة", "Try in the board"),
   all: t("الكل", "All"),
   hardForgot: t("الصعبة والمنسية", "Hard & Forgot"),
+  mine: t("✨ إبداعات نور لك", "✨ Noor's creations for you"),
   mastery: t("الإتقان", "Mastery"),
   noCards: t("لا توجد بطاقات", "No cards"),
+  noCreations: t(
+    "لسه مفيش بطاقات من نور. اطلب منه: «ولّد بطاقات لنقط ضعفي» أو «اعملّي بطاقات عن الأربطة».",
+    "No cards from Noor yet. Ask him: “make flashcards for my weak spots” or “make cards about ligaments”.",
+  ),
+  openNoor: t("افتح نور", "Open Noor"),
   hint: t("تلميح", "Hint"),
   showHint: t("اظهر التلميح", "Show hint"),
   hideHint: t("أخفِ التلميح", "Hide hint"),
   explainNoor: t("✨ اشرح لي يا نور", "✨ Explain with Noor"),
+  editNoor: t("عدّل مع نور", "Edit with Noor"),
+  del: t("حذف الرزمة", "Delete pack"),
+  delSure: t("تأكيد الحذف؟", "Delete for good?"),
+  prev: t("السابقة", "Previous"),
+  next: t("التالية", "Next"),
+  lookFigure: t(
+    "انظر الرسمة وسمّي الأجزاء المرقّمة",
+    "Look at the figure and name the numbered parts",
+  ),
 };
 
 export interface FlashcardsLabProps {
   onGoToBlock: (block: number) => void;
   onClose: () => void;
+  /** Open this Noor Studio pack first. */
+  initialPackId?: string | null;
 }
 
 const store = () => (typeof window === "undefined" ? null : safeStorage());
@@ -60,25 +81,66 @@ function safeStorage(): Storage | null {
   }
 }
 
-export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
+type Filter = "all" | "hard-forgot" | "mine";
+
+export function FlashcardsLab({ onGoToBlock, onClose, initialPackId = null }: FlashcardsLabProps) {
   const { l, lang } = useLang();
-  const { ask } = useNoorControl();
+  const { ask, setOpen, setStudioFocus } = useNoorControl();
+  const { state: studio, mutate } = useNoorStudio();
   const [state, setState] = useState<FlashcardState>(loadFlashcardState(store()));
-  const [filter, setFilter] = useState<"all" | "hard-forgot">("all");
+  const [filter, setFilter] = useState<Filter>(initialPackId ? "mine" : "all");
+  const [packId, setPackId] = useState<string | null>(initialPackId);
+  const [confirmDel, setConfirmDel] = useState(false);
   const [current, setCurrent] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
-  const cards = useMemo(() => getDueCards(supportFlashcards.cards, state, filter), [state, filter]);
+  const pack =
+    filter === "mine"
+      ? (studio.flashcardPacks.find((p) => p.id === packId) ??
+        studio.flashcardPacks[studio.flashcardPacks.length - 1] ??
+        null)
+      : null;
 
-  const card = cards[current];
+  const cards = useMemo<Flashcard[]>(() => {
+    if (filter === "mine") return pack ? packToFlashcards(pack) : [];
+    return getDueCards(supportFlashcards.cards, state, filter);
+  }, [filter, pack, state]);
 
-  const mastery = useMemo(() => masteryPercentage(state, supportFlashcards.cards.length), [state]);
+  const total = filter === "mine" ? (pack?.cards.length ?? 0) : supportFlashcards.cards.length;
+  const mastery = useMemo(() => {
+    if (filter !== "mine") return masteryPercentage(state, supportFlashcards.cards.length);
+    const ids = new Set(pack?.cards.map((c) => c.id));
+    const known = Object.entries(state.ratings).filter(([id, r]) => ids.has(id) && r === "known");
+    return total === 0 ? 0 : Math.round((100 * known.length) / total);
+  }, [filter, pack, state, total]);
 
-  // Save state on change
+  // The deck shrinks when a card is rated or a pack changes: never point past the end.
+  useEffect(() => {
+    if (current > 0 && current >= cards.length) setCurrent(0);
+  }, [cards.length, current]);
+
+  useEffect(() => {
+    if (pack) setStudioFocus({ kind: "flashcards", packId: pack.id });
+  }, [pack, setStudioFocus]);
+
   useEffect(() => {
     saveFlashcardState(store(), state);
   }, [state]);
+
+  useEffect(() => {
+    if (!confirmDel) return;
+    const id = window.setTimeout(() => setConfirmDel(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [confirmDel]);
+
+  const card = cards[current];
+
+  const reset = () => {
+    setCurrent(0);
+    setFlipped(false);
+    setShowHint(false);
+  };
 
   const handleRate = useCallback(
     (rating: FlashcardRating) => {
@@ -86,19 +148,15 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
       setState((prev) => rateCard(prev, card.id, rating));
       setFlipped(false);
       setShowHint(false);
-      if (current < cards.length - 1) {
-        setCurrent(current + 1);
-      } else {
-        setCurrent(0);
-      }
+      setCurrent((c) => (c < cards.length - 1 ? c + 1 : 0));
     },
-    [card, current, cards.length],
+    [card, cards.length],
   );
 
   const handlePrev = useCallback(() => {
     setFlipped(false);
     setShowHint(false);
-    setCurrent((prev) => (prev > 0 ? prev - 1 : cards.length - 1));
+    setCurrent((prev) => (prev > 0 ? prev - 1 : Math.max(0, cards.length - 1)));
   }, [cards.length]);
 
   const handleNext = useCallback(() => {
@@ -107,9 +165,7 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
     setCurrent((prev) => (prev < cards.length - 1 ? prev + 1 : 0));
   }, [cards.length]);
 
-  const handleFlip = useCallback(() => {
-    setFlipped((prev) => !prev);
-  }, []);
+  const handleFlip = useCallback(() => setFlipped((prev) => !prev), []);
 
   const handleGoToBlock = useCallback(() => {
     if (card?.blockId) {
@@ -131,159 +187,254 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowLeft") handlePrev();
-      else if (e.key === "ArrowRight") handleNext();
-      else if (e.key === " " || e.key === "Enter") handleFlip();
-      else if (flipped) {
+      if ((e.target as HTMLElement).closest("button, input, textarea")) {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      }
+      const forward = lang === "ar" ? "ArrowLeft" : "ArrowRight";
+      if (e.key === forward) handleNext();
+      else if (e.key === (lang === "ar" ? "ArrowRight" : "ArrowLeft")) handlePrev();
+      else if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        handleFlip();
+      } else if (flipped) {
         if (e.key === "1") handleRate("known");
         else if (e.key === "2") handleRate("hard");
         else if (e.key === "3") handleRate("forgot");
       }
     },
-    [handlePrev, handleNext, handleFlip, handleRate, flipped],
+    [lang, handlePrev, handleNext, handleFlip, handleRate, flipped],
   );
+
+  const frontText = card ? (lang === "ar" ? card.front.ar : card.front.en) : "";
+  const visual =
+    card && "visual" in card
+      ? (card as { visual?: { figure: Parameters<typeof getFigure>[0]; hideLabels?: boolean } })
+          .visual
+      : undefined;
+
+  const Header = (
+    <header className="flex items-center gap-3">
+      <h2 className="flex-1 text-lg font-bold">🗂️ {l(ui.title)}</h2>
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-full p-2 hover:bg-accent"
+        aria-label={l(ui.close)}
+      >
+        <X className="size-5" />
+      </button>
+    </header>
+  );
+
+  const Filters = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap rounded-full border p-0.5">
+        {(
+          [
+            ["all", l(ui.all)],
+            ["hard-forgot", l(ui.hardForgot)],
+            ["mine", `${l(ui.mine)} (${studio.flashcardPacks.length})`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => {
+              setFilter(id);
+              reset();
+            }}
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+              filter === id ? "bg-subject text-primary-foreground" : "hover:bg-accent"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1" />
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold text-muted-foreground">{l(ui.mastery)}:</span>
+        <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-gradient-subject transition-all"
+            style={{ width: `${mastery}%` }}
+          />
+        </div>
+        <span className="font-mono text-xs font-bold">{mastery}%</span>
+      </div>
+    </div>
+  );
+
+  const PackBar =
+    filter === "mine" ? (
+      studio.flashcardPacks.length === 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-subject/30 bg-subject/5 p-3">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">{l(ui.noCreations)}</p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1.5 rounded-full bg-subject px-3 py-1.5 text-xs font-bold text-primary-foreground"
+          >
+            <Sparkles className="size-3.5" /> {l(ui.openNoor)}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-subject/30 bg-subject/5 p-3">
+          {studio.flashcardPacks.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              aria-pressed={p.id === pack?.id}
+              onClick={() => {
+                setPackId(p.id);
+                reset();
+              }}
+              className={`max-w-56 truncate rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                p.id === pack?.id ? "border-subject bg-subject/20 text-subject" : "hover:bg-accent"
+              }`}
+            >
+              🗂️ {p.title[lang]} · {p.cards.length}
+            </button>
+          ))}
+          {pack && (
+            <span className="ms-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setStudioFocus({ kind: "flashcards", packId: pack.id });
+                  setOpen(true);
+                }}
+                className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold hover:bg-accent"
+              >
+                <Pencil className="size-3.5" /> {l(ui.editNoor)}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmDel) {
+                    mutate((s) => removeFlashcardPack(s, pack.id));
+                    setConfirmDel(false);
+                    setPackId(null);
+                    reset();
+                  } else setConfirmDel(true);
+                }}
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                  confirmDel
+                    ? "border-destructive bg-destructive/15 text-destructive"
+                    : "hover:bg-accent"
+                }`}
+              >
+                <Trash2 className="size-3.5" /> {l(confirmDel ? ui.delSure : ui.del)}
+              </button>
+            </span>
+          )}
+        </div>
+      )
+    ) : null;
 
   if (!card) {
     return (
-      <div className="flex h-full flex-col gap-4">
-        <header className="flex items-center gap-3">
-          <h2 className="flex-1 text-lg font-bold">🗂️ {l(ui.title)}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 hover:bg-accent"
-            aria-label={l(ui.close)}
-          >
-            <X className="size-5" />
-          </button>
-        </header>
-        <div className="flex flex-1 items-center justify-center">
+      <div className="flex flex-col gap-4">
+        {Header}
+        {Filters}
+        {PackBar}
+        <div className="flex min-h-40 items-center justify-center">
           <p className="text-center text-muted-foreground">{l(ui.noCards)}</p>
         </div>
       </div>
     );
   }
 
-  // Determine flip direction based on language (RTL needs reverse rotation)
-  const flipAngle = lang === "ar" ? 180 : 180;
+  const PrevIcon = lang === "ar" ? ChevronRight : ChevronLeft;
+  const NextIcon = lang === "ar" ? ChevronLeft : ChevronRight;
 
   return (
-    <div className="flex h-full flex-col gap-4" onKeyDown={handleKeyDown} tabIndex={-1}>
-      {/* Header */}
-      <header className="flex items-center gap-3">
-        <h2 className="flex-1 text-lg font-bold">🗂️ {l(ui.title)}</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full p-2 hover:bg-accent"
-          aria-label={l(ui.close)}
-        >
-          <X className="size-5" />
-        </button>
-      </header>
+    <div className="flex flex-col gap-4" onKeyDown={handleKeyDown} tabIndex={-1}>
+      {Header}
+      {Filters}
+      {PackBar}
 
-      {/* Filter and Mastery */}
-      <div className="flex items-center gap-2">
-        <div className="flex rounded-full border p-0.5">
-          <button
-            type="button"
-            onClick={() => setFilter("all")}
-            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-              filter === "all" ? "bg-subject text-primary-foreground" : "hover:bg-accent"
-            }`}
-          >
-            {l(ui.all)}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("hard-forgot")}
-            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-              filter === "hard-forgot" ? "bg-subject text-primary-foreground" : "hover:bg-accent"
-            }`}
-          >
-            {l(ui.hardForgot)}
-          </button>
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-muted-foreground">{l(ui.mastery)}:</span>
-          <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-gradient-subject transition-all"
-              style={{ width: `${mastery}%` }}
-            />
-          </div>
-          <span className="font-mono text-xs font-bold">{mastery}%</span>
-        </div>
-      </div>
-
-      {/* Card Counter */}
-      <div className="text-center">
+      {/* Counter: always «current / total» regardless of text direction */}
+      <div className="text-center" dir="ltr">
         <span className="font-mono text-sm text-muted-foreground">
           {current + 1} / {cards.length}
         </span>
       </div>
 
-      {/* Card with proper flip */}
-      <div className="flex flex-1 items-center justify-center">
-        <div className="relative h-72 w-full max-w-md" style={{ perspective: "1000px" }}>
-          {/* Front Face */}
+      {/* Card: two faces, each with backface-visibility hidden, so neither text is ever mirrored */}
+      <div className="flex items-center justify-center">
+        <div className="relative h-88 w-full max-w-md" style={{ perspective: "1000px" }}>
+          {/* Front */}
           <div
             className="absolute inset-0 transition-transform duration-500"
+            aria-hidden={flipped}
             style={{
               backfaceVisibility: "hidden",
-              transform: flipped ? `rotateY(${flipAngle}deg)` : "rotateY(0deg)",
+              transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
               transformStyle: "preserve-3d",
             }}
           >
-            <div className="glass flex h-full flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
-              {card.visual ? (
-                <div className="flex-1 overflow-hidden rounded-xl">
-                  <FigureSvg
-                    figure={getFigure(card.visual.figure)}
-                    lang={lang}
-                    mode={card.visual.hideLabels ? "hide" : "show"}
-                  />
-                </div>
-              ) : (
-                <p className="text-lg font-bold">{lang === "ar" ? card.front.ar : card.front.en}</p>
-              )}
-              {card.hint && !showHint && (
-                <button
-                  type="button"
-                  onClick={() => setShowHint(true)}
-                  className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold hover:bg-accent"
-                >
-                  <Eye className="size-3.5" /> {l(ui.showHint)}
-                </button>
-              )}
-              {card.hint && showHint && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{l(ui.hint)}:</span>
-                  <span>{lang === "ar" ? card.hint.ar : card.hint.en}</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowHint(false)}
-                    className="rounded-full p-1 hover:bg-accent"
+            <div className="glass flex h-full flex-col items-center gap-2 rounded-3xl p-4 text-center">
+              {visual ? (
+                <>
+                  <p className="shrink-0 text-sm font-bold">{frontText}</p>
+                  <div
+                    className="relative min-h-0 w-full flex-1 overflow-hidden rounded-2xl"
+                    style={{ minHeight: 160 }}
                   >
-                    <EyeOff className="size-3.5" />
-                  </button>
-                </div>
+                    <FigureSvg
+                      figure={getFigure(visual.figure)}
+                      lang={lang}
+                      mode={visual.hideLabels ? "hide" : "show"}
+                      className="absolute inset-0 h-full w-full"
+                    />
+                  </div>
+                  <p className="shrink-0 text-xs text-muted-foreground">{l(ui.lookFigure)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="my-auto text-lg font-bold leading-8">{frontText}</p>
+                  {card.hint && !showHint && (
+                    <button
+                      type="button"
+                      onClick={() => setShowHint(true)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold hover:bg-accent"
+                    >
+                      <Eye className="size-3.5" /> {l(ui.showHint)}
+                    </button>
+                  )}
+                  {card.hint && showHint && (
+                    <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+                      <span>{l(ui.hint)}:</span>
+                      <span>{lang === "ar" ? card.hint.ar : card.hint.en}</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowHint(false)}
+                        aria-label={l(ui.hideHint)}
+                        className="rounded-full p-1 hover:bg-accent"
+                      >
+                        <EyeOff className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          {/* Back Face */}
+          {/* Back */}
           <div
             className="absolute inset-0 transition-transform duration-500"
+            aria-hidden={!flipped}
             style={{
               backfaceVisibility: "hidden",
-              transform: flipped ? "rotateY(0deg)" : `rotateY(-${flipAngle}deg)`,
+              transform: flipped ? "rotateY(0deg)" : "rotateY(-180deg)",
               transformStyle: "preserve-3d",
             }}
           >
-            <div className="glass flex h-full flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
-              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+            <div className="glass flex h-full flex-col items-center justify-center gap-4 overflow-y-auto rounded-3xl p-6 text-center">
+              <p className="text-lg font-bold leading-8 text-green-600 dark:text-green-400">
                 {lang === "ar" ? card.back.ar : card.back.en}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
@@ -313,12 +464,11 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
           type="button"
           onClick={handlePrev}
           className="rounded-full p-2 hover:bg-accent"
-          aria-label="Previous"
+          aria-label={l(ui.prev)}
         >
-          {lang === "ar" ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
+          <PrevIcon className="size-5" />
         </button>
 
-        {/* Flip or Rating Buttons */}
         {!flipped ? (
           <button
             type="button"
@@ -357,9 +507,9 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
           type="button"
           onClick={handleNext}
           className="rounded-full p-2 hover:bg-accent"
-          aria-label="Next"
+          aria-label={l(ui.next)}
         >
-          {lang === "ar" ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
+          <NextIcon className="size-5" />
         </button>
       </div>
     </div>

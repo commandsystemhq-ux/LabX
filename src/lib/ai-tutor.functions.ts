@@ -1,5 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { adminAccessInput, adminTestInput, askTutorInput, saveSettingsInput } from "./ai-config";
+import {
+  adminAccessInput,
+  adminTestInput,
+  askTutorInput,
+  saveSettingsInput,
+  studioInput,
+} from "./ai-config";
 
 /**
  * Server functions are the only door to the AI provider and its settings. The `*.server.ts`
@@ -11,6 +17,14 @@ export const askAiTutorFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { getAiService } = await import("./ai/store.server");
     return getAiService().ask(data);
+  });
+
+/** Noor Studio: build or edit a custom mind map / flashcard pack. Signed-in students only (checked in the service). */
+export const generateNoorStudioFn = createServerFn({ method: "POST" })
+  .validator(studioInput)
+  .handler(async ({ data }) => {
+    const { getAiService } = await import("./ai/store.server");
+    return getAiService().generateStudio(data);
   });
 
 export const adminGetAiSettingsFn = createServerFn({ method: "POST" })

@@ -142,7 +142,7 @@ function Dashboard() {
 
           <aside className="flex flex-col gap-5">
             <div className="glass relative overflow-hidden rounded-3xl p-5">
-              <div className="absolute -top-20 size-48 rounded-full bg-subject/25 blur-3xl end-0" />
+              <div className="absolute -top-20 size-48 rounded-full bg-subject/25 blur-3xl inset-e-0" />
               <div className="relative flex items-center gap-4">
                 <div className="relative">
                   <ProgressRing value={mastery} size={76} stroke={7} />

@@ -348,7 +348,7 @@ export function LessonWorkspace({ lookup }: { lookup: LessonLookup }) {
         ref={boardRef}
         className={
           board
-            ? "fixed inset-0 z-[60] flex flex-col gap-3 bg-background p-3 sm:p-4"
+            ? "fixed inset-0 z-60 flex flex-col gap-3 bg-background p-3 sm:p-4"
             : "grid gap-4 lg:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]"
         }
       >

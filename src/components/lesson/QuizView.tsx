@@ -35,7 +35,7 @@ export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson
 
   if (done) {
     return (
-      <div className="glass flex min-h-[420px] flex-col items-center justify-center rounded-3xl p-8 text-center lg:min-h-[min(64vh,640px)]">
+      <div className="glass flex min-h-105 flex-col items-center justify-center rounded-3xl p-8 text-center lg:min-h-[min(64vh,640px)]">
         <span className="flex size-16 items-center justify-center rounded-3xl bg-gradient-subject text-primary-foreground glow-subject">
           <Trophy className="size-8" />
         </span>
@@ -69,8 +69,8 @@ export function QuizView({ sim, lookup, quiz, onSeeMistake, xpGained, nextLesson
   }
 
   return (
-    <div className="glass relative flex min-h-[420px] flex-col overflow-hidden rounded-3xl p-5 sm:p-8 lg:min-h-[min(64vh,640px)]">
-      <div className="absolute -top-24 size-64 rounded-full bg-subject/15 blur-3xl end-0" />
+    <div className="glass relative flex min-h-105 flex-col overflow-hidden rounded-3xl p-5 sm:p-8 lg:min-h-[min(64vh,640px)]">
+      <div className="absolute -top-24 size-64 rounded-full bg-subject/15 blur-3xl inset-e-0" />
       <div className="relative flex items-center justify-between">
         <p className="font-mono text-xs uppercase tracking-widest text-subject">
           {t("question")} {index + 1} {t("of")} {sim.quiz.length}

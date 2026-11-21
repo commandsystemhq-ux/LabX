@@ -74,9 +74,7 @@ export function Scene({
         lang={lang}
         mode={labels ? "show" : "hide"}
         marks={scene.highlight}
-        className={
-          "mx-auto w-full " + (FIGURES[view.figure].h > 400 ? "max-h-[560px]" : "max-h-[420px]")
-        }
+        className={"mx-auto w-full " + (FIGURES[view.figure].h > 400 ? "max-h-140" : "max-h-105")}
       />
       <p className="mt-1 text-center text-[11px] text-slate-500">{l(FIGURES[view.figure].title)}</p>
     </div>
@@ -86,7 +84,7 @@ export function Scene({
   const placeholder = (msg: string) => (
     <div
       role="status"
-      className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+      className="flex h-full min-h-80 items-center justify-center rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground"
     >
       {msg}
     </div>
@@ -193,7 +191,7 @@ export function Scene({
           </div>
         )}
       </div>
-      <div className="h-[min(56vh,520px)] min-h-[320px]">{body}</div>
+      <div className="h-[min(56vh,520px)] min-h-80">{body}</div>
     </section>
   );
 }

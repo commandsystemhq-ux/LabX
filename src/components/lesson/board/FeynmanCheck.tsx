@@ -122,7 +122,7 @@ export function FeynmanCheck({ def, blockTitle, onAskNoor, onReviewed }: Props) 
           aria-label={l(listening ? S.micStop : S.mic)}
           title={supported ? l(listening ? S.micStop : S.mic) : l(S.micNone)}
           className={
-            "absolute end-2 top-2 flex size-9 items-center justify-center rounded-full border transition " +
+            "absolute inset-e-2 top-2 flex size-9 items-center justify-center rounded-full border transition " +
             (listening
               ? "animate-pulse border-destructive bg-destructive/20 text-destructive"
               : "border-subject/40 bg-subject/10 text-subject hover:bg-subject/20 disabled:opacity-40")

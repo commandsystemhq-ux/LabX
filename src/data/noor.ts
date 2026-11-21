@@ -64,7 +64,9 @@ export type NoorAction =
   | { kind: "home" }
   | { kind: "dashboard"; grade?: GradeId | undefined; subject?: SubjectId | undefined }
   | { kind: "lesson"; id: string }
-  | { kind: "auth"; mode: "signin" | "signup" };
+  | { kind: "auth"; mode: "signin" | "signup" }
+  /** Opens a Noor Studio creation (never produced by AI tags: only built by the chat itself). */
+  | { kind: "studio"; studio: "mindmap" | "flashcards"; id: string };
 
 export interface NoorReply {
   text: string;
@@ -149,6 +151,14 @@ export function actionLabel(action: NoorAction, lang: Lang): string {
       const { lesson, subject } = findLesson(action.id);
       return `${subject.emoji} ${lesson.title[lang]}`;
     }
+    case "studio":
+      return action.studio === "mindmap"
+        ? ar
+          ? "🧠 افتح الخريطة"
+          : "🧠 Open the map"
+        : ar
+          ? "🗂️ افتح البطاقات"
+          : "🗂️ Open the cards";
     case "dashboard": {
       const parts = [ar ? "لوحة المنهج" : "Dashboard"];
       if (action.subject) parts.push(subjectById(action.subject).name[lang]);

@@ -15,7 +15,7 @@ export function IdleHintCard({ text, onAskTutor, onSnooze, onDismiss }: Props) {
     <div
       role="status"
       aria-live="polite"
-      className="glass-strong fixed inset-x-3 bottom-20 z-40 animate-fade-up rounded-2xl border border-subject/40 p-3 shadow-lg sm:inset-x-auto sm:bottom-4 sm:start-4 sm:w-80"
+      className="glass-strong fixed inset-x-3 bottom-20 z-40 animate-fade-up rounded-2xl border border-subject/40 p-3 shadow-lg sm:inset-x-auto sm:bottom-4 sm:inset-s-4 sm:w-80"
     >
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-subject/15 text-subject">
@@ -23,7 +23,7 @@ export function IdleHintCard({ text, onAskTutor, onSnooze, onDismiss }: Props) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-subject">{t("idleHintTitle")}</p>
-          <p className="mt-1 whitespace-pre-line break-words text-xs leading-relaxed">{text}</p>
+          <p className="mt-1 whitespace-pre-line wrap-break-word text-xs leading-relaxed">{text}</p>
         </div>
         <button
           type="button"

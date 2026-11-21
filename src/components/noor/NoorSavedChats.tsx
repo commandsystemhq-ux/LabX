@@ -83,7 +83,7 @@ export function NoorSavedChats({
             const deleteArmed = armed?.id === chat.id && armed.kind === "delete";
             return (
               <div key={chat.id} className="rounded-2xl border border-border bg-background/60 p-3">
-                <p dir="auto" className="break-words text-sm font-semibold">
+                <p dir="auto" className="wrap-break-word text-sm font-semibold">
                   {chat.title}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">

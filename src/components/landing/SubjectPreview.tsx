@@ -156,7 +156,7 @@ export function SubjectPreview() {
             style={{ animationDelay: `${i * 100}ms` }}
             className="group glass relative flex animate-fade-up flex-col overflow-hidden rounded-3xl p-5 transition-all duration-300 hover:-translate-y-1.5 hover:border-subject/50 hover:glow-subject"
           >
-            <div className="absolute -top-24 size-48 rounded-full bg-subject/20 blur-3xl transition-opacity group-hover:opacity-100 end-0 opacity-50" />
+            <div className="absolute -top-24 size-48 rounded-full bg-subject/20 blur-3xl transition-opacity group-hover:opacity-100 inset-e-0 opacity-50" />
             <div className="relative flex items-center justify-between">
               <span className="flex size-11 items-center justify-center rounded-2xl bg-subject/15 text-xl">
                 {s.emoji}

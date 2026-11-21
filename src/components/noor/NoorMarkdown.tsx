@@ -97,7 +97,7 @@ function renderInline(parts: Inline[]): ReactNode {
 
 export function NoorMarkdown({ text }: { text: string }) {
   return (
-    <div className="space-y-2 break-words">
+    <div className="space-y-2 wrap-break-word">
       {parseMarkdown(text).map((b, i) => {
         switch (b.kind) {
           case "heading":

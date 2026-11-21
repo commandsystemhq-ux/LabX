@@ -245,7 +245,7 @@ function VertebraeGraph({ block, onScene, onEvent, onSaveCurve }: Omit<GraphLabP
             setMarker(n);
             onScene({ vertebra: n });
           }}
-          className="w-full accent-[var(--color-subject,#0ea5e9)]"
+          className="w-full accent-subject"
           aria-label={lang === "ar" ? "اختر الفقرة" : "Choose the vertebra"}
         />
       </label>
@@ -484,7 +484,7 @@ function SkullGraph({ block, onScene, onEvent, onSaveCurve }: Omit<GraphLabProps
             setAge(a);
             onScene({ skullAge: a });
           }}
-          className="w-full accent-[var(--color-subject,#0ea5e9)]"
+          className="w-full accent-subject"
           aria-label={lang === "ar" ? "العمر" : "Age"}
         />
       </label>

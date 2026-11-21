@@ -327,7 +327,7 @@ export function EquilibriumTimeline({ values, time }: { values: SimValues; time:
         className="relative mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
       >
         <span
-          className="absolute inset-y-0 start-0 rounded-full bg-gradient-subject"
+          className="absolute inset-y-0 inset-s-0 rounded-full bg-gradient-subject"
           style={{ width: `${pct}%` }}
         />
       </div>

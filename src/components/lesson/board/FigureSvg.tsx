@@ -3,7 +3,7 @@ import type { Callout, Figure, Shape, Tone } from "@/data/lessons/supportFigures
 import type { Lang } from "@/lib/i18n";
 
 /**
- * The 2D «ministry exam» figure: a paper-white schematic with numbered leader lines. The same
+ * The 2D «ministry exam» figure: a dark-slate schematic (light strokes #E2E8F0 / #38BDF8 / #34D399) with numbered leader lines. The same
  * component draws the answer key (`show`), the practice sheet with hidden data (`hide`) and the
  * interactive labelling sheet (`slots`).
  */
@@ -159,7 +159,7 @@ function CalloutMark({
 }) {
   const { x, y, lx, ly } = labelPos(c);
   const name = c.name[lang];
-  const color = state === "right" ? "#15803d" : state === "wrong" ? "#b91c1c" : "#E2E8F0";
+  const color = state === "right" ? "#34D399" : state === "wrong" ? "#F87171" : "#E2E8F0";
   const long = name.length * 6.4 > 112;
   const interactive = mode === "slots" && onCallout;
   const shown = mode === "show" ? name : mode === "slots" ? (text ?? "") : "";
@@ -203,13 +203,13 @@ function CalloutMark({
           cx={c.ax}
           cy={c.ay}
           r="9"
-          fill={selected ? "#fde68a" : "#ffffffcc"}
-          stroke={color}
+          fill={selected ? "#334155" : "#0f172a"}
+          stroke={selected ? "#FACC15" : color}
           strokeWidth={selected ? 2.5 : 1.4}
           strokeDasharray={text ? undefined : "3 2"}
         />
       ) : (
-        <circle cx={c.ax} cy={c.ay} r="2.6" fill={color} />
+        <circle cx={c.ax} cy={c.ay} r="3" fill={state === "none" ? "#34D399" : color} />
       )}
       {mode === "slots" && (
         <text
@@ -225,7 +225,7 @@ function CalloutMark({
       )}
       {mode === "hide" ? (
         <g>
-          <circle cx={x} cy={y} r="9" fill="#fff" stroke={color} strokeWidth="1.2" />
+          <circle cx={x} cy={y} r="9" fill="#0f172a" stroke="#38BDF8" strokeWidth="1.4" />
           <text x={x} y={y + 3.5} fontSize="10" fontWeight="700" textAnchor="middle" fill={color}>
             {n}
           </text>
@@ -238,7 +238,7 @@ function CalloutMark({
             width="112"
             height="20"
             rx="6"
-            fill={selected ? "#fef3c7" : "#fff"}
+            fill={selected ? "#334155" : "#0f172a"}
             stroke={color}
             strokeWidth={selected ? 2 : 1}
             strokeDasharray={text ? undefined : "3 2"}
@@ -248,7 +248,7 @@ function CalloutMark({
             y={y + 4}
             fontSize="9.5"
             fontWeight="700"
-            fill="#64748b"
+            fill="#94A3B8"
             textAnchor="middle"
           >
             {n}
@@ -275,7 +275,7 @@ function CalloutMark({
           fontWeight="600"
           textAnchor="middle"
           fill={color}
-          stroke="#ffffff"
+          stroke="#1e293b"
           strokeWidth="3"
           paintOrder="stroke"
           {...(long ? { textLength: 112, lengthAdjust: "spacingAndGlyphs" } : {})}

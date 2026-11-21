@@ -16,6 +16,7 @@ import { SUPPORT_LESSON_ID } from "@/data/lessons/supportTypes";
 import { findLesson } from "@/data/mockCurriculum";
 import { LanguageProvider } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
+import { studioStore } from "@/lib/use-noor-studio";
 
 function Probe() {
   const s = useNoorSupport()?.ctx;
@@ -72,6 +73,7 @@ async function mount(search: { duel?: string; vs?: string } = {}) {
 beforeEach(() => {
   window.localStorage.clear();
   progressStore.reset();
+  studioStore.reset();
   // jsdom has no WebGL: the stage must fall back to the 2D exam figure and keep working.
   vi.stubGlobal("requestAnimationFrame", () => 0);
   vi.stubGlobal("cancelAnimationFrame", () => {});
@@ -192,5 +194,100 @@ describe("live board lesson", () => {
     expect(screen.getByText(/1100/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /انضم لتحدي صاحبك/ }));
     expect(await screen.findByText(/1\/8|1 \/ 8/)).toBeInTheDocument();
+  });
+});
+
+describe("Noor Studio from the chat", () => {
+  const openNoor = async () => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "نور" }));
+    });
+  };
+  const say = async (text: string) => {
+    const input = screen.getByPlaceholderText(/اسأل نور/);
+    fireEvent.change(input, { target: { value: text } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+    });
+  };
+
+  it("builds a mind map from a message, saves it for the account and opens it in the Mind Map Lab", async () => {
+    await mount();
+    await openNoor();
+    await say("اعملّي خريطة ذهنية للعمود الفقري");
+    expect(
+      await screen.findByText(/الخريطة جاهزة/, undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    // Saved in this (guest) account's own slot.
+    expect(window.localStorage.getItem("labx.noor-studio.guest.v1")).toContain("العمود الفقري");
+    expect(window.localStorage.getItem("labx.noor-studio.u-1.v1")).toBeNull();
+
+    fireEvent.click(await screen.findByRole("button", { name: /افتح الخريطة/ }));
+    expect(await screen.findByRole("heading", { name: /الخريطة الذهنية/ })).toBeInTheDocument();
+    const mine = screen.getByRole("button", { name: /خريطة: العمود الفقري/ });
+    expect(mine).toHaveAttribute("aria-pressed", "true");
+    expect(document.querySelector("[data-node]")).toBeTruthy();
+  });
+
+  it("a blank-grid request opens the Lab straight in recall mode", async () => {
+    await mount();
+    await openNoor();
+    await say("اعمل شبكة فاضية عن الأربطة");
+    fireEvent.click(await screen.findByRole("button", { name: /افتح الخريطة/ }, { timeout: 3000 }));
+    expect(await screen.findByRole("button", { name: /صحّح الخريطة يا نور/ })).toBeInTheDocument();
+  });
+
+  it("the Studio bar makes flashcards for weak spots and opens them under «إبداعات نور لك»", async () => {
+    await mount();
+    await openNoor();
+    expect(screen.getByText("🎨 استوديو نور")).toBeInTheDocument();
+    for (const name of [
+      /ولّد خريطة ذهنية مخصصة/,
+      /اعمل شبكة فاضية للتسميع/,
+      /ولّد بطاقات لنقط ضعفي/,
+      /عدّل الرزمة\/الخريطة الحالية/,
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    // Nothing to edit yet.
+    expect(screen.getByRole("button", { name: /عدّل الرزمة\/الخريطة الحالية/ })).toBeDisabled();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /ولّد بطاقات لنقط ضعفي/ }));
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /افتح البطاقات/ }, { timeout: 3000 }),
+    );
+    expect(await screen.findByRole("heading", { name: /البطاقات الذكية/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /إبداعات نور لك/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Now the edit button is available and edits the pack that was just made.
+    await openNoor();
+    expect(screen.getByRole("button", { name: /عدّل الرزمة\/الخريطة الحالية/ })).toBeEnabled();
+  });
+
+  it("edits the last pack from chat («خليها أبسط بالعامية») without leaving a provider error", async () => {
+    await mount();
+    await openNoor();
+    await say("اعملي بطاقات عن العمود الفقري");
+    await screen.findByRole("button", { name: /افتح البطاقات/ }, { timeout: 3000 });
+    const before = window.localStorage.getItem("labx.noor-studio.guest.v1");
+    await say("خليها أبسط بالعامية");
+    expect(await screen.findByText(/تم التعديل/, undefined, { timeout: 3000 })).toBeInTheDocument();
+    const after = window.localStorage.getItem("labx.noor-studio.guest.v1");
+    expect(after).not.toBe(before);
+    expect(JSON.parse(after!).flashcardPacks).toHaveLength(1);
+  });
+
+  it("does not hijack ordinary questions", async () => {
+    await mount();
+    await openNoor();
+    await say("إيه هي الخلية النباتية؟");
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 900));
+    });
+    expect(screen.queryByText(/جاهزة/)).toBeNull();
+    expect(window.localStorage.getItem("labx.noor-studio.guest.v1")).toBeNull();
   });
 });

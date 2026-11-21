@@ -13,7 +13,7 @@ export function HeroOrbit() {
   ];
 
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[520px]" dir="ltr">
+    <div className="relative mx-auto aspect-square w-full max-w-130" dir="ltr">
       <div className="absolute inset-[12%] rounded-full bg-gradient-brand opacity-20 blur-3xl" />
       {orbits.map((o) => (
         <div
@@ -26,7 +26,7 @@ export function HeroOrbit() {
               <SubjectIcon subject={o.subject} className="size-5 text-subject" />
             </div>
           </div>
-          <span className="absolute bottom-[12%] right-[6%] size-2 rounded-full bg-subject shadow-[var(--shadow-glow)]" />
+          <span className="absolute bottom-[12%] right-[6%] size-2 rounded-full bg-subject shadow-(--shadow-glow)" />
         </div>
       ))}
 

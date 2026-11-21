@@ -404,7 +404,7 @@ function AdminPage() {
                         value={id}
                         checked={form.provider === id}
                         onChange={() => set("provider", id)}
-                        className="size-4 accent-[var(--subject)]"
+                        className="size-4 accent-subject"
                       />
                       {t(label)}
                     </label>
@@ -560,7 +560,7 @@ function AdminPage() {
                             type="checkbox"
                             checked={form.bedrockClearSession}
                             onChange={(e) => set("bedrockClearSession", e.target.checked)}
-                            className="size-4 accent-[var(--subject)]"
+                            className="size-4 accent-subject"
                           />
                           {t("adminClearSession")}
                         </label>
@@ -783,7 +783,7 @@ function AdminPage() {
                         {test.provider} · {test.ms} ms
                       </span>
                     </p>
-                    <p className="mt-1 break-words text-xs text-muted-foreground">
+                    <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
                       {t("adminTestTarget")}{" "}
                       <span className="font-mono" dir="ltr">
                         {test.target}
@@ -802,7 +802,7 @@ function AdminPage() {
                       </span>
                     </p>
                     {test.target && (
-                      <p className="mt-1 break-words text-xs text-muted-foreground">
+                      <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
                         {t("adminTestTarget")}{" "}
                         <span className="font-mono" dir="ltr">
                           {test.target}
@@ -811,7 +811,7 @@ function AdminPage() {
                     )}
                     {test.hint && <p className="mt-2 text-sm">{t(HINT_KEYS[test.hint])}</p>}
                     {test.detail && (
-                      <p className="mt-1 break-words font-mono text-xs" dir="ltr">
+                      <p className="mt-1 wrap-break-word font-mono text-xs" dir="ltr">
                         {test.detail}
                       </p>
                     )}
@@ -883,7 +883,7 @@ function RadioRow<T extends string>({
               value={id}
               checked={value === id}
               onChange={() => onChange(id)}
-              className="size-4 accent-[var(--subject)]"
+              className="size-4 accent-subject"
             />
             <span dir="ltr">{label}</span>
           </label>
@@ -1007,7 +1007,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border bg-background/50 p-3">
       <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-mono font-bold">{value}</dd>
+      <dd className="mt-1 wrap-break-word font-mono font-bold">{value}</dd>
     </div>
   );
 }

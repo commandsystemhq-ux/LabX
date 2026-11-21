@@ -95,8 +95,8 @@ export function SimulationStage(props: Props) {
         " " +
         (board
           ? "h-full"
-          : "aspect-[4/3] min-h-[340px] sm:aspect-[16/10] lg:aspect-auto lg:h-[min(64vh,640px)]") +
-        (step === 1 && !board ? " max-sm:min-h-[520px]" : "")
+          : "aspect-4/3 min-h-85 sm:aspect-16/10 lg:aspect-auto lg:h-[min(64vh,640px)]") +
+        (step === 1 && !board ? " max-sm:min-h-130" : "")
       }
     >
       {/* TODO: Mount Three.js Canvas here
@@ -126,7 +126,7 @@ export function SimulationStage(props: Props) {
         <div
           aria-hidden
           className={
-            "pointer-events-none absolute inset-0 z-[5] " +
+            "pointer-events-none absolute inset-0 z-5 " +
             (level === 2 ? "animate-hazard-critical" : "animate-hazard-warning")
           }
         />
@@ -185,7 +185,7 @@ export function SimulationStage(props: Props) {
 
       {/* Board mode: big readouts for the classroom */}
       {board && (
-        <div className="absolute end-4 top-16 z-10 flex flex-col gap-2">
+        <div className="absolute inset-e-4 top-16 z-10 flex flex-col gap-2">
           {readouts.map((r) => (
             <div key={r.key} className="glass rounded-2xl px-4 py-2 text-end">
               <p className="text-xs text-muted-foreground">{l(r.label)}</p>
@@ -246,7 +246,7 @@ export function SimulationStage(props: Props) {
       )}
 
       {/* Top overlay column: quiz demo or hazard banner, then insets (formula, timeline, energy) */}
-      <div className="pointer-events-none absolute inset-x-3 top-12 z-20 flex flex-col items-start gap-2 [&>*]:pointer-events-auto">
+      <div className="pointer-events-none absolute inset-x-3 top-12 z-20 flex flex-col items-start gap-2 *:pointer-events-auto">
         {props.demo ? (
           <div className="mx-auto w-full max-w-xl animate-fade-up">
             <div className="flex flex-col gap-3 rounded-2xl border border-warning/50 bg-background/92 p-3 backdrop-blur-md">

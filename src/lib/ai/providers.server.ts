@@ -202,7 +202,7 @@ async function postJson(
   }
 }
 
-function finish(text: unknown): string {
+function finish(text: unknown, limit: number = MAX_REPLY_CHARS): string {
   if (typeof text !== "string" || !text.trim()) {
     throw new ProviderError(
       "empty reply",
@@ -210,7 +210,7 @@ function finish(text: unknown): string {
       "The model returned no text. For reasoning models raise Max Completion Tokens.",
     );
   }
-  return text.trim().slice(0, MAX_REPLY_CHARS);
+  return text.trim().slice(0, limit);
 }
 
 /** Saved generation settings with defaults applied; `temperature` stays undefined (not sent) when unset. */
@@ -273,7 +273,7 @@ const TEMPERATURE_REJECTED_RE =
  */
 export async function callBedrock(
   config: BedrockConfig,
-  prompts: { system: string; user: string },
+  prompts: { system: string; user: string; maxChars?: number },
   fetchImpl: Fetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<string> {
@@ -369,7 +369,7 @@ export async function callBedrock(
     bedrockNoTemperature.add(quirkKey);
   }
   const blocks = invoke ? data.content : data.output?.message?.content;
-  return finish(blocks?.find((c) => typeof c.text === "string")?.text);
+  return finish(blocks?.find((c) => typeof c.text === "string")?.text, prompts.maxChars);
 }
 
 type TokenField = "max_completion_tokens" | "max_tokens";
@@ -387,7 +387,7 @@ const azureQuirks = new Map<string, AzureQuirks>();
  */
 export async function callAzure(
   config: AzureConfig,
-  prompts: { system: string; user: string },
+  prompts: { system: string; user: string; maxChars?: number },
   fetchImpl: Fetch = fetch,
 ): Promise<string> {
   const g = generationOf(config);
@@ -420,7 +420,7 @@ export async function callAzure(
       )) as { choices?: { message?: { content?: unknown } }[] };
       if (azureQuirks.size > 100) azureQuirks.clear();
       azureQuirks.set(key, quirks);
-      return finish(data.choices?.[0]?.message?.content);
+      return finish(data.choices?.[0]?.message?.content, prompts.maxChars);
     } catch (error) {
       const d = error instanceof ProviderError && error.status === 400 ? (error.detail ?? "") : "";
       if (attempt >= 2 || !d) throw error;

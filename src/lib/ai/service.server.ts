@@ -11,6 +11,8 @@ import {
   type PublicAiSettings,
   type PublicGeneration,
   type SaveSettingsInput,
+  type StudioInput,
+  type StudioResult,
 } from "@/lib/ai-config";
 import { decryptJson, encryptJson, isValidEncryptionKey } from "./crypto.server";
 import { buildStudentProfile, formatStudentProfile } from "./student-context.server";
@@ -22,6 +24,7 @@ import {
   generationOf,
   ProviderError,
 } from "./providers.server";
+import { buildStudioPrompts, parseStudioReply } from "./studio.server";
 
 /** AI tutor business logic. All I/O goes through `AiStore`, so it can be tested without Supabase. */
 
@@ -225,6 +228,49 @@ export function createAiService(deps: AiServiceDeps) {
         }
       } catch (error) {
         console.error("AI tutor failure", error instanceof Error ? error.name : "unknown");
+        return { ok: false, reason: "error" };
+      }
+    },
+
+    /**
+     * Noor Studio: asks the active provider for a custom mind map / flashcard pack (JSON), for a
+     * signed-in student only. Never throws; any failure is a reason and the client builds the pack
+     * locally instead, so the student never sees a provider error.
+     */
+    async generateStudio(input: StudioInput): Promise<StudioResult> {
+      try {
+        const user = await store.getUser(input.accessToken).catch(() => null);
+        if (!user) return { ok: false, reason: "auth" };
+
+        const row = await store.loadSettings();
+        if (!row.enabled || !ready) return { ok: false, reason: "disabled" };
+
+        const provider = row.active_provider;
+        const config =
+          provider === "bedrock"
+            ? await readConfig<BedrockConfig>(row, "bedrock", bedrockStored)
+            : await readConfig<AzureConfig>(row, "azure", azureStored);
+        if (!config) return { ok: false, reason: "disabled" };
+
+        if (!allow(user.id)) return { ok: false, reason: "rate" };
+
+        const prompts = buildStudioPrompts(input, config.extraInstructions);
+        try {
+          const text =
+            provider === "bedrock"
+              ? await callBedrock(config as BedrockConfig, prompts, deps.fetchImpl)
+              : await callAzure(config as AzureConfig, prompts, deps.fetchImpl);
+          await store.recordUsage(provider, true).catch(() => {});
+          const output = parseStudioReply(text, input.kind);
+          return output ? { ok: true, output } : { ok: false, reason: "error" };
+        } catch (error) {
+          const e = error instanceof ProviderError ? error : null;
+          console.error("AI studio provider error", provider, e?.status ?? "-", e?.detail ?? "");
+          await store.recordUsage(provider, false).catch(() => {});
+          return { ok: false, reason: "error" };
+        }
+      } catch (error) {
+        console.error("AI studio failure", error instanceof Error ? error.name : "unknown");
         return { ok: false, reason: "error" };
       }
     },

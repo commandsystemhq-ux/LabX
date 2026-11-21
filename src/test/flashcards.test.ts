@@ -191,3 +191,42 @@ describe("nextReviewTime", () => {
     expect(time).toBeGreaterThanOrEqual(Date.now() + day);
   });
 });
+
+describe("no empty cards (1–51)", () => {
+  const cards = supportFlashcards.cards;
+
+  it("has 51 cards and each one has a question and an answer in both languages", () => {
+    expect(cards).toHaveLength(51);
+    cards.forEach((c, i) => {
+      for (const side of [c.front, c.back]) {
+        expect(side.ar.trim().length, `card ${i + 1} (${c.id})`).toBeGreaterThan(0);
+        expect(side.en.trim().length, `card ${i + 1} (${c.id})`).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  it("has unique ids that the rating storage accepts", () => {
+    const ids = cards.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const state = sanitizeFlashcardState({
+      v: 1,
+      ratings: Object.fromEntries(ids.map((id) => [id, "known"])),
+      nextReview: {},
+    });
+    expect(Object.keys(state.ratings)).toHaveLength(ids.length);
+  });
+
+  it("cards 46–51 are the silent figure cards, and each figure really draws something", () => {
+    const visual = cards.map((c, i) => ({ c, n: i + 1 })).filter(({ c }) => c.visual);
+    expect(visual.map((v) => v.n)).toEqual([46, 47, 48, 49, 50, 51]);
+    for (const { c, n } of visual) {
+      const fig = getFigure(c.visual!.figure);
+      expect(fig.w, `card ${n}`).toBeGreaterThan(0);
+      expect(fig.h, `card ${n}`).toBeGreaterThan(0);
+      expect(fig.shapes.length, `card ${n}`).toBeGreaterThan(3);
+      expect(fig.callouts.length, `card ${n}`).toBeGreaterThan(1);
+      // Silent drawing: the answer is not the question text.
+      expect(c.visual!.hideLabels, `card ${n}`).toBe(true);
+    }
+  });
+});

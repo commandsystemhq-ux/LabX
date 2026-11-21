@@ -277,6 +277,74 @@ export type AskTutorInput = z.infer<typeof askTutorInput>;
 export type AskTutorResult =
   { ok: true; text: string } | { ok: false; reason: "disabled" | "auth" | "rate" | "error" };
 
+/* ------------------------------- Noor Studio ------------------------------- */
+
+export const MAX_STUDIO_REQUEST = 300;
+export const MAX_STUDIO_CURRENT = 5000;
+
+/** Creates or edits a custom mind map / flashcard pack. Signed-in students only. */
+export const studioInput = z.object({
+  accessToken,
+  action: z.enum(["create", "edit"]),
+  kind: z.enum(["mindmap", "flashcards"]),
+  lang: z.enum(["ar", "en"]),
+  request: z.string().trim().min(1).max(MAX_STUDIO_REQUEST),
+  /** Mind map only: ask for a recall grid (the client blanks the nodes; the AI writes the tree). */
+  blank: z.boolean().optional(),
+  /** Blocks (1–14) the client resolved from the request; the server adds their textbook text. */
+  blockIds: z.array(z.number().int().min(1).max(14)).max(14).optional(),
+  /** `edit`: the current pack as compact JSON text (untrusted data). */
+  current: z.string().max(MAX_STUDIO_CURRENT).optional(),
+});
+export type StudioInput = z.infer<typeof studioInput>;
+
+const studioText = (max: number) =>
+  z.object({ ar: z.string().trim().max(max), en: z.string().trim().max(max) });
+
+/** What the model must return (the client assigns ids and re-validates everything). */
+export const studioOutput = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("flashcards"),
+    title: studioText(100),
+    cards: z
+      .array(
+        z.object({
+          blockId: z.number().int().min(1).max(14).optional(),
+          front: studioText(400),
+          back: studioText(500),
+          hint: studioText(200).optional(),
+        }),
+      )
+      .min(1)
+      .max(40),
+  }),
+  z.object({
+    type: z.literal("mindmap"),
+    title: studioText(100),
+    nodes: z
+      .array(
+        z.object({
+          key: z.string().regex(/^[A-Za-z0-9_-]{1,20}$/),
+          parent: z
+            .string()
+            .regex(/^[A-Za-z0-9_-]{1,20}$/)
+            .nullish(),
+          title: studioText(100),
+          badge: studioText(50).optional(),
+          summary: studioText(400).optional(),
+          blockId: z.number().int().min(1).max(14).optional(),
+        }),
+      )
+      .min(2)
+      .max(80),
+  }),
+]);
+export type StudioOutput = z.infer<typeof studioOutput>;
+
+export type StudioResult =
+  | { ok: true; output: StudioOutput }
+  | { ok: false; reason: "disabled" | "auth" | "rate" | "error" };
+
 /** Generation settings as shown to the admin (defaults filled in). */
 export interface PublicGeneration {
   maxTokens: number;

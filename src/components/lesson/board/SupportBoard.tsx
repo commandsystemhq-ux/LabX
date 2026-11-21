@@ -9,7 +9,7 @@ import {
   Layers,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNoorControl } from "@/components/noor/NoorProvider";
+import { useNoorControl, useStudioOpen } from "@/components/noor/NoorProvider";
 import type { LessonLookup } from "@/data/mockCurriculum";
 import {
   allQuestions,
@@ -104,9 +104,15 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   const { l, lang } = useLang();
   const lessonId = lookup.lesson.id;
   const duelParams = useMemo(() => parseDuelParams({ duel, vs }), [duel, vs]);
-  const { setSupport, setOpen, ask } = useNoorControl();
+  const { setSupport, setOpen, ask, consumeStudioOpen } = useNoorControl();
+  const studioOpen = useStudioOpen();
 
   const [page, setPage] = useState<Page>(duelParams ? "duel" : "block");
+  /** A Noor Studio creation the chat asked to open (remounts the Lab so it starts on that pack). */
+  const [studioView, setStudioView] = useState<{ n: number; packId: string | null }>({
+    n: 0,
+    packId: null,
+  });
   const [active, setActive] = useState(1);
   const [phases, setPhases] = useState<Record<number, Phase>>({});
   const [mode, setMode] = useState<StageMode>("3d");
@@ -120,6 +126,13 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   const [actions, setActions] = useState<L10n[]>([]);
   const [loaded, setLoaded] = useState(false);
   const noteCount = useRef(0);
+
+  useEffect(() => {
+    if (!studioOpen) return;
+    setStudioView({ n: studioOpen.id, packId: studioOpen.packId });
+    setPage(studioOpen.kind === "mindmap" ? "mindmap" : "flashcards");
+    consumeStudioOpen(studioOpen.id);
+  }, [studioOpen, consumeStudioOpen]);
 
   // Everything persisted is read once on the client (the first render must match the server).
   useEffect(() => {
@@ -497,8 +510,15 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
       {page === "mindmap" && (
         <div className="glass rounded-3xl p-4">
           <MindMapLab
+            key={`mm-${studioView.n}`}
             radar={radar}
+            initialPackId={studioView.packId}
             onGoToBlock={(n) => goBlock(n, "board")}
+            onView3D={(n) => {
+              setMode("3d");
+              goBlock(n, "board");
+            }}
+            onResult={(b, itemId, ok) => record(b, itemId, ok)}
             onClose={() => setPage("block")}
           />
         </div>
@@ -507,6 +527,8 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
       {page === "flashcards" && (
         <div className="glass rounded-3xl p-4">
           <FlashcardsLab
+            key={`fc-${studioView.n}`}
+            initialPackId={studioView.packId}
             onGoToBlock={(n) => goBlock(n, "board")}
             onClose={() => setPage("block")}
           />

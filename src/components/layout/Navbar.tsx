@@ -46,7 +46,7 @@ export function GradePreview({ active = DEFAULT_GRADE }: { active?: GradeId | un
         <ChevronDown className={"size-3.5 transition-transform " + (open ? "rotate-180" : "")} />
       </button>
       {open && (
-        <div className="glass-strong absolute top-full z-50 mt-2 w-60 animate-fade-up rounded-xl p-1.5 start-0">
+        <div className="glass-strong absolute top-full z-50 mt-2 w-60 animate-fade-up rounded-xl p-1.5 inset-s-0">
           {grades.map((g) => (
             <Link
               key={g.id}
@@ -91,7 +91,7 @@ function AccountActions() {
         <Link
           to="/auth"
           aria-label={t("account")}
-          className="glass hidden max-w-[10rem] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent/60 md:flex"
+          className="glass hidden max-w-40 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent/60 md:flex"
         >
           <UserRound className="size-4 shrink-0 text-phys" />
           <span className="truncate">{user.name || user.email}</span>

@@ -61,7 +61,7 @@ export function Notebook({
   return (
     <aside
       aria-label={l(S.notebook)}
-      className="glass-strong fixed inset-x-2 bottom-2 top-16 z-50 flex flex-col overflow-hidden rounded-3xl sm:inset-x-auto sm:start-4 sm:w-[420px]"
+      className="glass-strong fixed inset-x-2 bottom-2 top-16 z-50 flex flex-col overflow-hidden rounded-3xl sm:inset-x-auto sm:inset-s-4 sm:w-105"
     >
       <header className="flex items-center gap-2 border-b border-border p-3">
         <h3 className="flex-1 font-bold">📓 {l(S.notebook)}</h3>
@@ -157,7 +157,7 @@ export function Notebook({
                   {e.kind === "note" ? "📝" : e.kind === "drawing" ? "✏️" : "🧪"} {l(S.block)}{" "}
                   {e.block} · {new Date(e.at).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB")}
                 </p>
-                {e.title && <p className="break-words text-sm font-bold">{e.title}</p>}
+                {e.title && <p className="wrap-break-word text-sm font-bold">{e.title}</p>}
               </div>
               <button
                 type="button"
@@ -169,7 +169,7 @@ export function Notebook({
               </button>
             </div>
             {e.text && (
-              <p className="mt-1 whitespace-pre-line break-words text-sm leading-relaxed">
+              <p className="mt-1 whitespace-pre-line wrap-break-word text-sm leading-relaxed">
                 {e.text}
               </p>
             )}

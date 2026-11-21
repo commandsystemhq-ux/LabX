@@ -69,7 +69,7 @@ function Prediction({ text }: { text: string | null | undefined }) {
   const { t } = useLang();
   if (!text) return null;
   return (
-    <p className="mb-3 break-words rounded-2xl border border-subject/30 bg-subject/10 p-3 text-sm">
+    <p className="mb-3 wrap-break-word rounded-2xl border border-subject/30 bg-subject/10 p-3 text-sm">
       <span className="font-bold text-subject">🤔 {t("yourPrediction")}: </span>
       {text}
     </p>

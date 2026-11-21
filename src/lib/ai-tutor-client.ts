@@ -9,11 +9,16 @@ import {
   MAX_STUDENT_WORK,
   MAX_SUMMARY_CHARS,
   MAX_TURN_CHARS,
+  MAX_STUDIO_CURRENT,
+  MAX_STUDIO_REQUEST,
   type AskTutorInput,
   type AskTutorResult,
+  type StudioInput,
+  type StudioOutput,
+  type StudioResult,
   type TUTOR_INTENTS,
 } from "./ai-config";
-import { askAiTutorFn } from "./ai-tutor.functions";
+import { askAiTutorFn, generateNoorStudioFn } from "./ai-tutor.functions";
 import type { Lang } from "./i18n";
 
 const CLIENT_TIMEOUT_MS = 25_000;
@@ -153,4 +158,65 @@ export async function requestAiReply(p: AiReplyParams): Promise<string | null> {
 /** Test helper: forget any "disabled / rate limited" backoff. */
 export function resetAiBackoff() {
   blocked = null;
+}
+
+const STUDIO_TIMEOUT_MS = 45_000;
+type StudioAsk = (opts: { data: StudioInput }) => Promise<StudioResult>;
+
+export interface AiStudioParams {
+  accessToken: string | null;
+  action: StudioInput["action"];
+  kind: StudioInput["kind"];
+  lang: Lang;
+  request: string;
+  blank?: boolean | undefined;
+  blockIds?: number[] | undefined;
+  /** `edit`: compact JSON of the current pack. */
+  current?: string | undefined;
+  onFallback?: ((reason: FallbackReason) => void) | undefined;
+  /** Injected in tests. */
+  ask?: StudioAsk;
+  now?: () => number;
+}
+
+/**
+ * Asks the server to build or edit a Noor Studio pack. Resolves to the model's (server-validated)
+ * description, or null whenever the caller should build the pack locally instead — signed out, AI
+ * off, rate limited, timeout or any provider error. Never throws and never shows an error.
+ */
+export async function requestAiStudio(p: AiStudioParams): Promise<StudioOutput | null> {
+  const now = p.now ?? Date.now;
+  const fallback = (reason: FallbackReason) => {
+    p.onFallback?.(reason);
+    return null;
+  };
+  if (!p.accessToken) return fallback("auth");
+  if (blocked && now() < blocked.until) return fallback(blocked.reason);
+
+  const data: StudioInput = {
+    accessToken: p.accessToken,
+    action: p.action,
+    kind: p.kind,
+    lang: p.lang,
+    request: p.request.trim().slice(0, MAX_STUDIO_REQUEST),
+    ...(p.blank ? { blank: true } : {}),
+    ...(p.blockIds?.length ? { blockIds: p.blockIds.slice(0, 14) } : {}),
+    ...(p.current ? { current: p.current.slice(0, MAX_STUDIO_CURRENT) } : {}),
+  };
+  const ask = p.ask ?? (generateNoorStudioFn as unknown as StudioAsk);
+  try {
+    const result = await Promise.race([
+      ask({ data }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), STUDIO_TIMEOUT_MS)),
+    ]);
+    if (!result) return fallback("offline");
+    if (result.ok) return result.output;
+    if (result.reason === "disabled") {
+      blocked = { until: now() + DISABLED_BACKOFF_MS, reason: "disabled" };
+    }
+    if (result.reason === "rate") blocked = { until: now() + RATE_BACKOFF_MS, reason: "rate" };
+    return fallback(result.reason);
+  } catch {
+    return fallback("offline");
+  }
 }

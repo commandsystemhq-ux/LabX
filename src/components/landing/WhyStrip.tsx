@@ -78,7 +78,7 @@ export function WhyStrip() {
           </h2>
 
           <div className="glass mt-8 overflow-x-auto rounded-3xl">
-            <table className="w-full min-w-[520px] text-sm">
+            <table className="w-full min-w-130 text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="p-4 text-start font-semibold text-muted-foreground" />
@@ -120,7 +120,7 @@ export function WhyStrip() {
             data-subject="physics"
             className="glass relative overflow-hidden rounded-3xl p-6 glow-subject"
           >
-            <div className="absolute -top-16 size-40 rounded-full bg-subject/25 blur-3xl end-0" />
+            <div className="absolute -top-16 size-40 rounded-full bg-subject/25 blur-3xl inset-e-0" />
             <User className="relative size-5 text-subject" />
             <p className="relative mt-3 text-sm font-semibold text-muted-foreground">
               {ar ? "باقة الطالب" : "Student plan"}
