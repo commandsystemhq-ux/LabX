@@ -1,5 +1,15 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Search, X, Box, ExternalLink } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  X,
+  Box,
+  ExternalLink,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supportMindMap, findNode, collectBlockIds } from "@/data/lessons/supportMindMap";
 import type { MindMapNode } from "@/data/lessons/supportTypes";
 import { weakness } from "@/data/lessons/supportRadar";
@@ -16,6 +26,12 @@ const ui = {
   close: t("إغلاق", "Close"),
   summary: t("ملخص", "Summary"),
   noResults: t("لا توجد نتائج", "No results"),
+  testMode: t("وضع الاختبار: شبكة فاضية", "Test Mode: Empty Grid"),
+  checkAnswers: t("صحّح الخريطة يا نور", "Check with Noor"),
+  exitTest: t("خروج من الاختبار", "Exit Test"),
+  correct: t("صح", "Correct"),
+  wrong: t("غلط", "Wrong"),
+  fillPlaceholder: t("؟", "?"),
 };
 
 export interface MindMapLabProps {
@@ -25,95 +41,171 @@ export interface MindMapLabProps {
   onClose: () => void;
 }
 
-/** Mastery color based on radar weakness. */
-function masteryColor(weak: number): string {
-  if (weak >= 50) return "text-red-500";
-  if (weak >= 25) return "text-yellow-500";
-  return "text-green-500";
-}
+/** Layout constants */
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 60;
+const LEVEL_GAP_X = 220;
+const MIN_NODE_GAP_Y = 20;
 
-/** Mastery background based on radar weakness. */
-function masteryBg(weak: number): string {
-  if (weak >= 50) return "bg-red-500/10 border-red-500/30";
-  if (weak >= 25) return "bg-yellow-500/10 border-yellow-500/30";
-  return "bg-green-500/10 border-green-500/30";
-}
-
-interface NodeCardProps {
+interface LayoutNode {
   node: MindMapNode;
-  radar: RadarState;
-  expanded: boolean;
-  onToggle: () => void;
-  onSelect: () => void;
-  lang: "ar" | "en";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  children: LayoutNode[];
 }
 
-function NodeCard({ node, radar, expanded, onToggle, onSelect, lang }: NodeCardProps) {
-  const hasChildren = node.children && node.children.length > 0;
-  const weak = node.blockId ? weakness(radar, node.blockId) : 0;
-  const color = node.blockId ? masteryColor(weak) : "text-foreground";
-  const bg = node.blockId ? masteryBg(weak) : "bg-background/50";
+/**
+ * Pure layout function: calculates (x, y) for each node in a horizontal tree.
+ * Ensures no overlapping nodes with balanced vertical spacing.
+ */
+export function layoutMindMapTree(root: MindMapNode, expanded: Set<string>): LayoutNode {
+  const layoutCache = new Map<string, LayoutNode>();
 
-  return (
-    <div className="flex flex-col">
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`group flex items-center gap-2 rounded-xl border px-3 py-2 text-start transition hover:bg-accent ${bg}`}
-      >
-        {hasChildren && (
-          <span className="flex-shrink-0">
-            {expanded ? (
-              <ChevronDown className="size-4 text-muted-foreground" />
-            ) : lang === "ar" ? (
-              <ChevronLeft className="size-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="size-4 text-muted-foreground" />
-            )}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className={`flex items-center gap-2 ${color}`}>
-            <span className="truncate font-bold">
-              {lang === "ar" ? node.title.ar : node.title.en}
-            </span>
-            {node.badge && (
-              <span className="flex-shrink-0 rounded-full bg-subject/20 px-2 py-0.5 text-xs font-mono">
-                {lang === "ar" ? node.badge.ar : node.badge.en}
-              </span>
-            )}
-          </div>
-        </div>
-        {node.blockId && (
-          <span className="flex-shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-mono">
-            §{node.blockId}
-          </span>
-        )}
-      </button>
-      {hasChildren && expanded && (
-        <div className="mt-1 me-4 flex flex-col gap-1 border-s-subject/30 ps-2 rtl:border-e-2 rtl:border-s-0">
-          {node.children!.map((child) => (
-            <NodeCard
-              key={child.id}
-              node={child}
-              radar={radar}
-              expanded={false}
-              onToggle={() => {}}
-              onSelect={onSelect}
-              lang={lang}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  function measureSubtree(node: MindMapNode): number {
+    if (!node.children || !expanded.has(node.id)) {
+      return NODE_HEIGHT;
+    }
+    let totalHeight = 0;
+    for (const child of node.children) {
+      totalHeight += measureSubtree(child);
+      totalHeight += MIN_NODE_GAP_Y;
+    }
+    return Math.max(NODE_HEIGHT, totalHeight - MIN_NODE_GAP_Y);
+  }
+
+  function layoutNode(node: MindMapNode, x: number, yStart: number, yEnd: number): LayoutNode {
+    const existing = layoutCache.get(node.id);
+    if (existing) return existing;
+
+    const y = (yStart + yEnd) / 2;
+    const layout: LayoutNode = {
+      node,
+      x,
+      y,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      children: [],
+    };
+
+    if (node.children && expanded.has(node.id)) {
+      const totalHeight = measureSubtree(node);
+      let currentY = y - totalHeight / 2;
+
+      for (const child of node.children) {
+        const childHeight = measureSubtree(child);
+        const childLayout = layoutNode(child, x + LEVEL_GAP_X, currentY, currentY + childHeight);
+        layout.children.push(childLayout);
+        currentY += childHeight + MIN_NODE_GAP_Y;
+      }
+    }
+
+    layoutCache.set(node.id, layout);
+    return layout;
+  }
+
+  const totalHeight = measureSubtree(root);
+  return layoutNode(root, 50, 0, totalHeight);
+}
+
+/** Generate cubic Bezier path between parent and child nodes */
+function bezierPath(parent: LayoutNode, child: LayoutNode): string {
+  const x1 = parent.x + parent.width;
+  const y1 = parent.y + parent.height / 2;
+  const x2 = child.x;
+  const y2 = child.y + child.height / 2;
+  const cx1 = x1 + (x2 - x1) / 2;
+  const cx2 = x1 + (x2 - x1) / 2;
+  return `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+}
+
+/** Mastery color based on radar weakness */
+function masteryColor(weak: number): string {
+  if (weak >= 50) return "bg-red-500/20 border-red-500/50 text-red-400";
+  if (weak >= 25) return "bg-yellow-500/20 border-yellow-500/50 text-yellow-400";
+  return "bg-green-500/20 border-green-500/50 text-green-400";
 }
 
 export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLabProps) {
   const { l, lang } = useLang();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["root", "plant", "human"]));
   const [selected, setSelected] = useState<MindMapNode | null>(null);
+  const [testMode, setTestMode] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+
+  // Pan and zoom state
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const layout = useMemo(() => layoutMindMapTree(supportMindMap.root, expanded), [expanded]);
+
+  // Calculate bounds for fit
+  const bounds = useMemo(() => {
+    let maxX = 0,
+      maxY = 0,
+      minY = 0;
+    function traverse(l: LayoutNode) {
+      maxX = Math.max(maxX, l.x + l.width);
+      maxY = Math.max(maxY, l.y + l.height / 2);
+      minY = Math.min(minY, l.y - l.height / 2);
+      l.children.forEach(traverse);
+    }
+    traverse(layout);
+    return { width: maxX + 100, height: maxY - minY + 100, minY };
+  }, [layout]);
+
+  // Pan handlers
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    },
+    [pan],
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDragging) return;
+      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    },
+    [isDragging, dragStart],
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Zoom handlers
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom((z) => Math.min(2, Math.max(0.3, z * delta)));
+  }, []);
+
+  const zoomIn = useCallback(() => setZoom((z) => Math.min(2, z * 1.2)), []);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(0.3, z / 1.2)), []);
+  const fitView = useCallback(() => {
+    if (!containerRef.current) return;
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+    const scaleX = containerWidth / bounds.width;
+    const scaleY = containerHeight / bounds.height;
+    const newZoom = Math.min(scaleX, scaleY, 1);
+    setZoom(newZoom);
+    setPan({ x: 20, y: -bounds.minY * newZoom + 20 });
+  }, [bounds]);
+
+  useEffect(() => {
+    fitView();
+  }, [fitView]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -123,46 +215,6 @@ export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLab
       return next;
     });
   }, []);
-
-  const selectNode = useCallback(
-    (node: MindMapNode) => {
-      setSelected(node);
-      if (node.children && node.children.length > 0) {
-        toggleExpand(node.id);
-      }
-    },
-    [toggleExpand],
-  );
-
-  const filteredNodes = useMemo(() => {
-    if (!search.trim()) return null;
-    const query = search.toLowerCase();
-    const results: MindMapNode[] = [];
-
-    function searchNode(node: MindMapNode) {
-      const titleMatch =
-        node.title.ar.toLowerCase().includes(query) || node.title.en.toLowerCase().includes(query);
-      const badgeMatch = node.badge
-        ? node.badge.ar.toLowerCase().includes(query) || node.badge.en.toLowerCase().includes(query)
-        : false;
-      const summaryMatch = node.summary
-        ? node.summary.ar.toLowerCase().includes(query) ||
-          node.summary.en.toLowerCase().includes(query)
-        : false;
-
-      if (titleMatch || badgeMatch || summaryMatch) {
-        results.push(node);
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          searchNode(child);
-        }
-      }
-    }
-
-    searchNode(supportMindMap.root);
-    return results;
-  }, [search]);
 
   const handleGoToBlock = useCallback(() => {
     if (selected?.blockId) {
@@ -178,11 +230,193 @@ export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLab
     }
   }, [selected, onView3D, onClose]);
 
+  // Test mode: collect all leaf nodes with blockId
+  const testNodes = useMemo(() => {
+    const nodes: MindMapNode[] = [];
+    function collect(node: MindMapNode) {
+      if (node.blockId && (!node.children || node.children.length === 0)) {
+        nodes.push(node);
+      }
+      if (node.children) {
+        node.children.forEach(collect);
+      }
+    }
+    collect(supportMindMap.root);
+    return nodes;
+  }, []);
+
+  const handleAnswerSelect = useCallback((nodeId: string, answer: string) => {
+    setUserAnswers((prev) => ({ ...prev, [nodeId]: answer }));
+  }, []);
+
+  const handleCheckAnswers = useCallback(() => {
+    const results: Record<string, boolean> = {};
+    testNodes.forEach((node) => {
+      const correctAnswer = lang === "ar" ? node.title.ar : node.title.en;
+      results[node.id] = userAnswers[node.id] === correctAnswer;
+    });
+    setChecked(results);
+  }, [testNodes, userAnswers, lang]);
+
+  const enterTestMode = useCallback(() => {
+    setTestMode(true);
+    setUserAnswers({});
+    setChecked({});
+    setExpanded(new Set(["root", "plant", "human"]));
+  }, []);
+
+  const exitTestMode = useCallback(() => {
+    setTestMode(false);
+    setUserAnswers({});
+    setChecked({});
+  }, []);
+
+  // Render node
+  const renderNode = useCallback(
+    (l: LayoutNode, depth: number = 0): React.ReactNode => {
+      const weak = l.node.blockId ? weakness(radar, l.node.blockId) : 0;
+      const masteryClass = l.node.blockId ? masteryColor(weak) : "bg-slate-700/50 border-slate-600";
+      const hasChildren = l.node.children && l.node.children.length > 0;
+      const isExpanded = expanded.has(l.node.id);
+      const isSelected = selected?.id === l.node.id;
+
+      // Test mode: show placeholder for leaf nodes
+      const showTestPlaceholder = testMode && l.node.blockId && !l.node.children?.length;
+      const userAnswer = userAnswers[l.node.id];
+      const isChecked = l.node.id in checked;
+      const isCorrect = checked[l.node.id];
+
+      // Generate options for test mode (correct + 2 wrong from siblings)
+      const testOptions = useMemo(() => {
+        if (!showTestPlaceholder) return [];
+        const siblings = testNodes.filter((n) => n.id !== l.node.id);
+        const shuffled = siblings.sort(() => Math.random() - 0.5).slice(0, 2);
+        const correct = lang === "ar" ? l.node.title.ar : l.node.title.en;
+        return [correct, ...shuffled.map((n) => (lang === "ar" ? n.title.ar : n.title.en))].sort(
+          () => Math.random() - 0.5,
+        );
+      }, [showTestPlaceholder, testNodes, l.node, lang]);
+
+      return (
+        <g key={l.node.id}>
+          {/* Bezier paths to children */}
+          {l.children.map((child) => (
+            <path
+              key={`path-${child.node.id}`}
+              d={bezierPath(l, child)}
+              fill="none"
+              stroke="#38BDF8"
+              strokeWidth={2}
+              opacity={0.6}
+            />
+          ))}
+
+          {/* Node rectangle */}
+          <g
+            transform={`translate(${l.x}, ${l.y - l.height / 2})`}
+            onClick={() => !testMode && setSelected(l.node)}
+            style={{ cursor: testMode ? "default" : "pointer" }}
+          >
+            <rect
+              width={l.width}
+              height={l.height}
+              rx={12}
+              className={`${masteryClass} ${isSelected ? "ring-2 ring-cyan-400" : ""}`}
+              fill="currentColor"
+              fillOpacity={0.1}
+              stroke="currentColor"
+              strokeWidth={1.5}
+            />
+
+            {/* Expand/collapse button */}
+            {hasChildren && !testMode && (
+              <g
+                transform={`translate(${lang === "ar" ? -12 : l.width + 12}, ${l.height / 2})`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpand(l.node.id);
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <circle r={10} fill="#1e293b" stroke="#38BDF8" strokeWidth={1.5} />
+                <text
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#38BDF8"
+                  fontSize={14}
+                  fontWeight="bold"
+                >
+                  {isExpanded ? (lang === "ar" ? ">" : "<") : lang === "ar" ? "<" : ">"}
+                </text>
+              </g>
+            )}
+
+            {/* Node content */}
+            <foreignObject x={8} y={8} width={l.width - 16} height={l.height - 16}>
+              <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
+                {showTestPlaceholder ? (
+                  <>
+                    <span className="text-xs text-slate-400">
+                      {lang === "ar" ? `§${l.node.blockId}` : `§${l.node.blockId}`}
+                    </span>
+                    {isChecked ? (
+                      <div className="flex items-center gap-1">
+                        {isCorrect ? (
+                          <CheckCircle2 className="size-5 text-green-400" />
+                        ) : (
+                          <XCircle className="size-5 text-red-400" />
+                        )}
+                        <span className="text-sm font-bold">
+                          {lang === "ar" ? l.node.title.ar : l.node.title.en}
+                        </span>
+                      </div>
+                    ) : userAnswer ? (
+                      <span className="text-sm font-bold text-cyan-400">{userAnswer}</span>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <HelpCircle className="size-4 text-cyan-400" />
+                        <span className="text-lg font-bold text-cyan-400">?</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm font-bold">
+                      {lang === "ar" ? l.node.title.ar : l.node.title.en}
+                    </span>
+                    {l.node.badge && (
+                      <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs font-mono">
+                        {lang === "ar" ? l.node.badge.ar : l.node.badge.en}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            </foreignObject>
+          </g>
+
+          {/* Render children */}
+          {l.children.map((child) => renderNode(child, depth + 1))}
+        </g>
+      );
+    },
+    [expanded, selected, testMode, userAnswers, checked, radar, lang, toggleExpand],
+  );
+
   return (
     <div className="flex h-full flex-col gap-4">
       {/* Header */}
       <header className="flex items-center gap-3">
         <h2 className="flex-1 text-lg font-bold">🧠 {l(ui.title)}</h2>
+        {!testMode && (
+          <button
+            type="button"
+            onClick={enterTestMode}
+            className="flex items-center gap-1.5 rounded-full bg-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-400 hover:bg-cyan-500/30"
+          >
+            <HelpCircle className="size-3.5" /> {l(ui.testMode)}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -193,76 +427,85 @@ export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLab
         </button>
       </header>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={l(ui.search)}
-          className="w-full rounded-xl border bg-background/50 py-2 ps-10 pe-3 text-sm focus:border-subject focus:outline-none"
-        />
-      </div>
+      {/* Test mode controls */}
+      {testMode && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={exitTestMode}
+            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold hover:bg-accent"
+          >
+            <X className="size-3.5" /> {l(ui.exitTest)}
+          </button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={handleCheckAnswers}
+            disabled={Object.keys(userAnswers).length < testNodes.length}
+            className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-600 disabled:opacity-50"
+          >
+            <CheckCircle2 className="size-3.5" /> {l(ui.checkAnswers)}
+          </button>
+        </div>
+      )}
 
-      {/* Tree or Search Results */}
-      <div className="flex-1 overflow-y-auto">
-        {filteredNodes ? (
-          filteredNodes.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              {filteredNodes.map((node) => (
-                <NodeCard
-                  key={node.id}
-                  node={node}
-                  radar={radar}
-                  expanded={expanded.has(node.id)}
-                  onToggle={() => toggleExpand(node.id)}
-                  onSelect={() => selectNode(node)}
-                  lang={lang}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-sm text-muted-foreground">{l(ui.noResults)}</p>
-          )
-        ) : (
-          <div className="flex flex-col gap-1">
-            <NodeCard
-              node={supportMindMap.root}
-              radar={radar}
-              expanded={expanded.has(supportMindMap.root.id)}
-              onToggle={() => toggleExpand(supportMindMap.root.id)}
-              onSelect={() => selectNode(supportMindMap.root)}
-              lang={lang}
-            />
-            {expanded.has(supportMindMap.root.id) && supportMindMap.root.children && (
-              <div className="mt-1 flex flex-col gap-1 border-s-subject/30 ps-2 rtl:border-e-2 rtl:border-s-0">
-                {supportMindMap.root.children.map((child) => (
-                  <NodeCard
-                    key={child.id}
-                    node={child}
-                    radar={radar}
-                    expanded={expanded.has(child.id)}
-                    onToggle={() => toggleExpand(child.id)}
-                    onSelect={() => selectNode(child)}
-                    lang={lang}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+      {/* Canvas */}
+      <div
+        ref={containerRef}
+        className="relative flex-1 overflow-hidden rounded-2xl bg-slate-900"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+      >
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="100%"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "0 0",
+          }}
+        >
+          {renderNode(layout)}
+        </svg>
+
+        {/* Zoom controls */}
+        <div className="absolute bottom-4 end-4 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={zoomIn}
+            className="rounded-full bg-slate-800 p-2 text-slate-300 hover:bg-slate-700"
+          >
+            <ZoomIn className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={zoomOut}
+            className="rounded-full bg-slate-800 p-2 text-slate-300 hover:bg-slate-700"
+          >
+            <ZoomOut className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={fitView}
+            className="rounded-full bg-slate-800 p-2 text-slate-300 hover:bg-slate-700"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* Selected Node Card */}
-      {selected && (
+      {selected && !testMode && (
         <div className="glass rounded-2xl p-4">
           <div className="mb-2 flex items-center gap-2">
             <h3 className="flex-1 font-bold">
               {lang === "ar" ? selected.title.ar : selected.title.en}
             </h3>
             {selected.badge && (
-              <span className="rounded-full bg-subject/20 px-2 py-0.5 text-xs font-mono">
+              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs font-mono">
                 {lang === "ar" ? selected.badge.ar : selected.badge.en}
               </span>
             )}
@@ -277,7 +520,7 @@ export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLab
               <button
                 type="button"
                 onClick={handleGoToBlock}
-                className="flex items-center gap-1.5 rounded-full bg-subject px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-subject/80"
+                className="flex items-center gap-1.5 rounded-full bg-cyan-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-600"
               >
                 <ExternalLink className="size-3.5" /> {l(ui.goToBlock)} §{selected.blockId}
               </button>
@@ -286,7 +529,7 @@ export function MindMapLab({ radar, onGoToBlock, onView3D, onClose }: MindMapLab
               <button
                 type="button"
                 onClick={handleView3D}
-                className="flex items-center gap-1.5 rounded-full border border-subject/40 bg-subject/10 px-3 py-1.5 text-xs font-bold text-subject hover:bg-subject/20"
+                className="flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20"
               >
                 <Box className="size-3.5" /> {l(ui.view3D)}
               </button>

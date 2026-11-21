@@ -9,6 +9,7 @@ import {
   EMPTY_FLASHCARD_STATE,
 } from "@/data/lessons/supportFlashcards";
 import { supportBlocks } from "@/data/lessons/supportLesson";
+import { getFigure } from "@/data/lessons/supportFigures";
 
 describe("supportFlashcards", () => {
   it("has at least 28 cards", () => {
@@ -38,6 +39,38 @@ describe("supportFlashcards", () => {
       expect(card.front.en.length).toBeGreaterThan(0);
       expect(card.back.ar.length).toBeGreaterThan(0);
       expect(card.back.en.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("all cards have either question text or valid visual figure", () => {
+    for (const card of supportFlashcards.cards) {
+      if (card.visual) {
+        // Visual cards must have a valid figure reference
+        const figure = getFigure(card.visual.figure);
+        expect(
+          figure,
+          `Card ${card.id} has invalid visual figure ${card.visual.figure}`,
+        ).toBeDefined();
+        expect(figure.shapes.length, `Card ${card.id} figure has no shapes`).toBeGreaterThan(0);
+      } else {
+        // Non-visual cards must have question text
+        expect(card.front.ar.length, `Card ${card.id} has empty Arabic front`).toBeGreaterThan(0);
+        expect(card.front.en.length, `Card ${card.id} has empty English front`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("visual cards (46-51) have valid figure references", () => {
+    const visualCards = supportFlashcards.cards.filter((c) => c.visual);
+    expect(visualCards.length, "Expected at least 6 visual cards").toBeGreaterThanOrEqual(6);
+
+    for (const card of visualCards) {
+      const figure = getFigure(card.visual!.figure);
+      expect(figure, `Visual card ${card.id} has invalid figure`).toBeDefined();
+      expect(
+        figure.callouts.length,
+        `Visual card ${card.id} figure has no callouts`,
+      ).toBeGreaterThan(0);
     }
   });
 });

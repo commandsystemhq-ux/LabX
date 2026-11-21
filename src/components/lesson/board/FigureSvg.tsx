@@ -9,23 +9,23 @@ import type { Lang } from "@/lib/i18n";
  */
 
 const TONES: Record<Tone, { fill: string; stroke: string }> = {
-  none: { fill: "none", stroke: "#475569" },
-  ink: { fill: "none", stroke: "#334155" },
-  soft: { fill: "#e2e8f0", stroke: "#64748b" },
-  wall: { fill: "#bbf7d0", stroke: "#15803d" },
-  cyto: { fill: "#fef9c3", stroke: "#a16207" },
-  vac: { fill: "#bae6fd", stroke: "#0369a1" },
-  nuc: { fill: "#ddd6fe", stroke: "#6d28d9" },
-  green: { fill: "#4ade80", stroke: "#166534" },
-  mito: { fill: "#fdba74", stroke: "#c2410c" },
-  bone: { fill: "#f5ecd0", stroke: "#57534e" },
-  cart: { fill: "#bfdbfe", stroke: "#1d4ed8" },
-  musc: { fill: "#fca5a5", stroke: "#b91c1c" },
-  lig: { fill: "none", stroke: "#d97706" },
-  tend: { fill: "#fde68a", stroke: "#92400e" },
-  cutin: { fill: "none", stroke: "#ca8a04" },
-  xyl: { fill: "#fecaca", stroke: "#991b1b" },
-  phl: { fill: "#bfdbfe", stroke: "#1e40af" },
+  none: { fill: "none", stroke: "#E2E8F0" },
+  ink: { fill: "none", stroke: "#E2E8F0" },
+  soft: { fill: "#E2E8F0", stroke: "#38BDF8" },
+  wall: { fill: "#bbf7d0", stroke: "#38BDF8" },
+  cyto: { fill: "#fef9c3", stroke: "#38BDF8" },
+  vac: { fill: "#bae6fd", stroke: "#38BDF8" },
+  nuc: { fill: "#ddd6fe", stroke: "#38BDF8" },
+  green: { fill: "#4ade80", stroke: "#38BDF8" },
+  mito: { fill: "#fdba74", stroke: "#38BDF8" },
+  bone: { fill: "#f5ecd0", stroke: "#38BDF8" },
+  cart: { fill: "#bfdbfe", stroke: "#38BDF8" },
+  musc: { fill: "#fca5a5", stroke: "#38BDF8" },
+  lig: { fill: "none", stroke: "#38BDF8" },
+  tend: { fill: "#fde68a", stroke: "#38BDF8" },
+  cutin: { fill: "none", stroke: "#38BDF8" },
+  xyl: { fill: "#fecaca", stroke: "#38BDF8" },
+  phl: { fill: "#bfdbfe", stroke: "#38BDF8" },
 };
 
 function drawShape(s: Shape, key: string, revealed?: ReadonlySet<string>): ReactNode {
@@ -81,7 +81,7 @@ function drawShape(s: Shape, key: string, revealed?: ReadonlySet<string>): React
     }
     case "text":
       return (
-        <text key={key} x={s.x} y={s.y} fontSize={s.size ?? 12} fill="#334155" textAnchor="middle">
+        <text key={key} x={s.x} y={s.y} fontSize={s.size ?? 12} fill="#E2E8F0" textAnchor="middle">
           {s.s}
         </text>
       );
@@ -159,7 +159,7 @@ function CalloutMark({
 }) {
   const { x, y, lx, ly } = labelPos(c);
   const name = c.name[lang];
-  const color = state === "right" ? "#15803d" : state === "wrong" ? "#b91c1c" : "#0f172a";
+  const color = state === "right" ? "#15803d" : state === "wrong" ? "#b91c1c" : "#E2E8F0";
   const long = name.length * 6.4 > 112;
   const interactive = mode === "slots" && onCallout;
   const shown = mode === "show" ? name : mode === "slots" ? (text ?? "") : "";
@@ -310,7 +310,7 @@ export const FigureSvg = memo(function FigureSvg({
       className={className}
       role="img"
       aria-label={ariaLabel ?? figure.title[lang]}
-      style={{ background: "#fffdf7", borderRadius: 16, direction: "ltr" }}
+      style={{ background: "#1e293b", borderRadius: 16, direction: "ltr" }}
     >
       <rect
         x="1"
@@ -319,7 +319,7 @@ export const FigureSvg = memo(function FigureSvg({
         height={figure.h - 2}
         rx="14"
         fill="none"
-        stroke="#cbd5e1"
+        stroke="#38BDF8"
       />
       {figure.shapes.map((s, i) => drawShape(s, `s${i}`, revealed))}
       {figure.callouts.map((c, i) => {
