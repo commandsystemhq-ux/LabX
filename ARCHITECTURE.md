@@ -32,6 +32,7 @@ src/data/
                        supportFigures.ts (رسمات 2D «شكل الامتحان» + callouts)، supportCompare.ts، supportRadar.ts، supportDuel.ts (seed في الرابط)،
                        supportMystery.ts، supportNotebook.ts، supportProgress.ts (كلها تُنظَّف عند القراءة من localStorage)، supportNoor.ts (سياق نور + ردود محلية من نص الكتاب + مراجعة feynman)،
                        supportMindMap.ts (خريطة ذهنية تفاعلية للدرس)، supportFlashcards.ts (بطاقات ذكية بالتكرار المتباعد)،
+                       noorStudio.ts (استوديو نور: إنشاء وتعديل بطاقات وخرائط مخصصة لكل حساب)،
                        anatomyNodes.ts (مولَّد من GLB بـ scripts/gen-anatomy-nodes.py)
 src/lib/
   i18n.tsx             LanguageProvider (ar/en + RTL) وكل نصوص الواجهة `ui`

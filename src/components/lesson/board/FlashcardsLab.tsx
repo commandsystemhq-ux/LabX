@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,13 +23,14 @@ import type { Flashcard, FlashcardRating, FlashcardState } from "@/data/lessons/
 import { useLang, type L10n } from "@/lib/i18n";
 import { getFigure } from "@/data/lessons/supportFigures";
 import { FigureSvg } from "./FigureSvg";
+import { useNoorControl } from "@/components/noor/NoorProvider";
 
 const t = (ar: string, en: string): L10n => ({ ar, en });
 
 const ui = {
   title: t("البطاقات الذكية", "Smart Flashcards"),
   close: t("إغلاق", "Close"),
-  flip: t("اقلب", "Flip"),
+  flip: t("عرض الإجابة", "Show answer"),
   known: t("فهمتها", "Got it"),
   hard: t("صعبة", "Hard"),
   forgot: t("نسيتها", "Forgot"),
@@ -40,6 +42,7 @@ const ui = {
   hint: t("تلميح", "Hint"),
   showHint: t("اظهر التلميح", "Show hint"),
   hideHint: t("أخفِ التلميح", "Hide hint"),
+  explainNoor: t("✨ اشرح لي يا نور", "✨ Explain with Noor"),
 };
 
 export interface FlashcardsLabProps {
@@ -59,6 +62,7 @@ function safeStorage(): Storage | null {
 
 export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
   const { l, lang } = useLang();
+  const { ask } = useNoorControl();
   const [state, setState] = useState<FlashcardState>(loadFlashcardState(store()));
   const [filter, setFilter] = useState<"all" | "hard-forgot">("all");
   const [current, setCurrent] = useState(0);
@@ -114,6 +118,17 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
     }
   }, [card, onGoToBlock, onClose]);
 
+  const handleExplainNoor = useCallback(() => {
+    if (!card) return;
+    const front = lang === "ar" ? card.front.ar : card.front.en;
+    const back = lang === "ar" ? card.back.ar : card.back.en;
+    const prompt =
+      lang === "ar"
+        ? `اشرح لي هذه البطاقة بالعامية المصرية:\n\n**السؤال:** ${front}\n\n**الإجابة:** ${back}\n\nبسّطها لي واضربلي مثال من الحياة.`
+        : `Explain this flashcard in simple terms:\n\n**Question:** ${front}\n\n**Answer:** ${back}\n\nGive me a real-life example.`;
+    ask(prompt);
+  }, [card, lang, ask]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowLeft") handlePrev();
@@ -148,6 +163,9 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
       </div>
     );
   }
+
+  // Determine flip direction based on language (RTL needs reverse rotation)
+  const flipAngle = lang === "ar" ? 180 : 180;
 
   return (
     <div className="flex h-full flex-col gap-4" onKeyDown={handleKeyDown} tabIndex={-1}>
@@ -199,23 +217,26 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
         </div>
       </div>
 
-      {/* Card */}
+      {/* Card Counter */}
+      <div className="text-center">
+        <span className="font-mono text-sm text-muted-foreground">
+          {current + 1} / {cards.length}
+        </span>
+      </div>
+
+      {/* Card with proper flip */}
       <div className="flex flex-1 items-center justify-center">
-        <div
-          className="perspective-[1000px] relative w-full max-w-md"
-          style={{ perspective: "1000px" }}
-        >
-          {/* Front */}
+        <div className="relative h-72 w-full max-w-md" style={{ perspective: "1000px" }}>
+          {/* Front Face */}
           <div
-            className={`absolute inset-0 transition-transform duration-500 ${
-              flipped ? "rotate-y-180" : ""
-            }`}
+            className="absolute inset-0 transition-transform duration-500"
             style={{
               backfaceVisibility: "hidden",
-              transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+              transform: flipped ? `rotateY(${flipAngle}deg)` : "rotateY(0deg)",
+              transformStyle: "preserve-3d",
             }}
           >
-            <div className="glass flex h-64 flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
+            <div className="glass flex h-full flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
               {card.visual ? (
                 <div className="flex-1 overflow-hidden rounded-xl">
                   <FigureSvg
@@ -252,25 +273,35 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
             </div>
           </div>
 
-          {/* Back */}
+          {/* Back Face */}
           <div
-            className={`absolute inset-0 transition-transform duration-500 ${
-              flipped ? "" : "rotate-y-180"
-            }`}
+            className="absolute inset-0 transition-transform duration-500"
             style={{
               backfaceVisibility: "hidden",
-              transform: flipped ? "rotateY(0deg)" : "rotateY(180deg)",
+              transform: flipped ? "rotateY(0deg)" : `rotateY(-${flipAngle}deg)`,
+              transformStyle: "preserve-3d",
             }}
           >
-            <div className="glass flex h-64 flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
-              <p className="text-lg font-bold">{lang === "ar" ? card.back.ar : card.back.en}</p>
-              <button
-                type="button"
-                onClick={handleGoToBlock}
-                className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold hover:bg-accent"
-              >
-                <ExternalLink className="size-3.5" /> {l(ui.goToBlock)} §{card.blockId}
-              </button>
+            <div className="glass flex h-full flex-col items-center justify-center gap-4 rounded-3xl p-6 text-center">
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                {lang === "ar" ? card.back.ar : card.back.en}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExplainNoor}
+                  className="flex items-center gap-1.5 rounded-full bg-subject px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-subject/80"
+                >
+                  <Sparkles className="size-3.5" /> {l(ui.explainNoor)}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoToBlock}
+                  className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold hover:bg-accent"
+                >
+                  <ExternalLink className="size-3.5" /> {l(ui.goToBlock)} §{card.blockId}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -286,9 +317,42 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
         >
           {lang === "ar" ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
         </button>
-        <span className="font-mono text-sm">
-          {current + 1} / {cards.length}
-        </span>
+
+        {/* Flip or Rating Buttons */}
+        {!flipped ? (
+          <button
+            type="button"
+            onClick={handleFlip}
+            className="flex items-center gap-1.5 rounded-full bg-subject px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-subject/80"
+          >
+            <RotateCw className="size-4" /> {l(ui.flip)}
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleRate("known")}
+              className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-green-600"
+            >
+              <Check className="size-3.5" /> {l(ui.known)}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRate("hard")}
+              className="flex items-center gap-1.5 rounded-full bg-yellow-500 px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-yellow-600"
+            >
+              <AlertTriangle className="size-3.5" /> {l(ui.hard)}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRate("forgot")}
+              className="flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-red-600"
+            >
+              <X className="size-3.5" /> {l(ui.forgot)}
+            </button>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={handleNext}
@@ -298,46 +362,6 @@ export function FlashcardsLab({ onGoToBlock, onClose }: FlashcardsLabProps) {
           {lang === "ar" ? <ChevronLeft className="size-5" /> : <ChevronRight className="size-5" />}
         </button>
       </div>
-
-      {/* Flip Button */}
-      {!flipped && (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={handleFlip}
-            className="flex items-center gap-1.5 rounded-full bg-subject px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-subject/80"
-          >
-            <RotateCw className="size-4" /> {l(ui.flip)}
-          </button>
-        </div>
-      )}
-
-      {/* Rating Buttons */}
-      {flipped && (
-        <div className="flex justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => handleRate("known")}
-            className="flex items-center gap-1.5 rounded-full bg-green-500 px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-green-600"
-          >
-            <Check className="size-4" /> {l(ui.known)} ✅
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRate("hard")}
-            className="flex items-center gap-1.5 rounded-full bg-yellow-500 px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-yellow-600"
-          >
-            <AlertTriangle className="size-4" /> {l(ui.hard)} 🟡
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRate("forgot")}
-            className="flex items-center gap-1.5 rounded-full bg-red-500 px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-red-600"
-          >
-            <X className="size-4" /> {l(ui.forgot)} 🔴
-          </button>
-        </div>
-      )}
     </div>
   );
 }
