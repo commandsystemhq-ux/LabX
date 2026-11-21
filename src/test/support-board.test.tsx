@@ -197,7 +197,7 @@ describe("live board lesson", () => {
   });
 });
 
-describe("Noor Studio from the chat", () => {
+describe("Noor Studio workspace", () => {
   const openNoor = async () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "نور" }));
@@ -210,74 +210,113 @@ describe("Noor Studio from the chat", () => {
       fireEvent.submit(input.closest("form")!);
     });
   };
+  const openStudio = async () => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /استوديو نور/ }));
+    });
+  };
+  const ask = async (text: string) => {
+    const input = screen.getByPlaceholderText(/اطلب من نور/);
+    fireEvent.change(input, { target: { value: text } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+    });
+  };
+  const firstButton = async (name: RegExp) =>
+    (await screen.findAllByRole("button", { name }, { timeout: 3000 }))[0]!;
 
-  it("builds a mind map from a message, saves it for the account and opens it in the Mind Map Lab", async () => {
+  it("a studio command typed in the chat opens the Studio workspace and builds the map there", async () => {
     await mount();
     await openNoor();
     await say("اعملّي خريطة ذهنية للعمود الفقري");
     expect(
       await screen.findByText(/الخريطة جاهزة/, undefined, { timeout: 3000 }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "استوديو نور" })).toBeInTheDocument();
     // Saved in this (guest) account's own slot.
     expect(window.localStorage.getItem("labx.noor-studio.guest.v1")).toContain("العمود الفقري");
     expect(window.localStorage.getItem("labx.noor-studio.u-1.v1")).toBeNull();
 
-    fireEvent.click(await screen.findByRole("button", { name: /افتح الخريطة/ }));
+    fireEvent.click(await firstButton(/افتح الخريطة/));
     expect(await screen.findByRole("heading", { name: /الخريطة الذهنية/ })).toBeInTheDocument();
     const mine = screen.getByRole("button", { name: /خريطة: العمود الفقري/ });
     expect(mine).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelector("[data-node]")).toBeTruthy();
+    // Closing the Lab returns to the Studio it was opened from.
+    fireEvent.click(screen.getByRole("button", { name: "إغلاق" }));
+    expect(await screen.findByRole("region", { name: "استوديو نور" })).toBeInTheDocument();
   });
 
   it("a blank-grid request opens the Lab straight in recall mode", async () => {
     await mount();
     await openNoor();
     await say("اعمل شبكة فاضية عن الأربطة");
-    fireEvent.click(await screen.findByRole("button", { name: /افتح الخريطة/ }, { timeout: 3000 }));
+    fireEvent.click(await firstButton(/افتح الخريطة/));
     expect(await screen.findByRole("button", { name: /صحّح الخريطة يا نور/ })).toBeInTheDocument();
   });
 
-  it("the Studio bar makes flashcards for weak spots and opens them under «إبداعات نور لك»", async () => {
+  it("the chat is clean (no Studio buttons) and the top-bar button opens the full Studio", async () => {
     await mount();
     await openNoor();
-    expect(screen.getByText("🎨 استوديو نور")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ولّد بطاقات لنقط ضعفي/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /عدّل الرزمة\/الخريطة الحالية/ })).toBeNull();
+
+    await openStudio();
     for (const name of [
-      /ولّد خريطة ذهنية مخصصة/,
-      /اعمل شبكة فاضية للتسميع/,
-      /ولّد بطاقات لنقط ضعفي/,
-      /عدّل الرزمة\/الخريطة الحالية/,
+      /اختبرني في الجزئية/,
+      /ابنِ شبكة فاضية للتسميع/,
+      /ولّد أسئلة ذكية/,
+      /ملء الشاشة/,
     ]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
     // Nothing to edit yet.
     expect(screen.getByRole("button", { name: /عدّل الرزمة\/الخريطة الحالية/ })).toBeDisabled();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /ولّد بطاقات لنقط ضعفي/ }));
+      fireEvent.click(screen.getByRole("button", { name: /ولّد أسئلة ذكية/ }));
     });
-    fireEvent.click(
-      await screen.findByRole("button", { name: /افتح البطاقات/ }, { timeout: 3000 }),
-    );
+    fireEvent.click(await firstButton(/افتح البطاقات/));
     expect(await screen.findByRole("heading", { name: /البطاقات الذكية/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /إبداعات نور لك/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    // Now the edit button is available and edits the pack that was just made.
-    await openNoor();
-    expect(screen.getByRole("button", { name: /عدّل الرزمة\/الخريطة الحالية/ })).toBeEnabled();
   });
 
-  it("edits the last pack from chat («خليها أبسط بالعامية») without leaving a provider error", async () => {
+  it("«اختبرني في الجزئية» jumps to the quiz of the chosen block", async () => {
     await mount();
-    await openNoor();
-    await say("اعملي بطاقات عن العمود الفقري");
-    await screen.findByRole("button", { name: /افتح البطاقات/ }, { timeout: 3000 });
+    await openStudio();
+    fireEvent.click(screen.getByRole("button", { name: /اختبرني في الجزئية/ }));
+    expect(ctx()).toMatchObject({ block: 1, phase: "quiz" });
+  });
+
+  it("edits the last pack from the Studio («خليها أبسط بالعامية») without a provider error", async () => {
+    await mount();
+    await openStudio();
+    await ask("اعملي بطاقات عن العمود الفقري");
+    await firstButton(/افتح البطاقات/);
     const before = window.localStorage.getItem("labx.noor-studio.guest.v1");
-    await say("خليها أبسط بالعامية");
+    await ask("خليها أبسط بالعامية");
     expect(await screen.findByText(/تم التعديل/, undefined, { timeout: 3000 })).toBeInTheDocument();
     const after = window.localStorage.getItem("labx.noor-studio.guest.v1");
     expect(after).not.toBe(before);
     expect(JSON.parse(after!).flashcardPacks).toHaveLength(1);
+  });
+
+  it("full screen falls back to a fixed overlay (no Fullscreen API) and Esc leaves it", async () => {
+    await mount();
+    await openStudio();
+    const studio = screen.getByRole("region", { name: "استوديو نور" });
+    expect(studio.className).not.toContain("fixed");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /ملء الشاشة/ }));
+    });
+    expect(studio.className).toContain("fixed inset-0");
+    expect(screen.getByRole("button", { name: /إنهاء ملء الشاشة/ })).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(studio.className).not.toContain("fixed");
   });
 
   it("does not hijack ordinary questions", async () => {
@@ -288,6 +327,7 @@ describe("Noor Studio from the chat", () => {
       await new Promise((r) => setTimeout(r, 900));
     });
     expect(screen.queryByText(/جاهزة/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "استوديو نور" })).toBeNull();
     expect(window.localStorage.getItem("labx.noor-studio.guest.v1")).toBeNull();
   });
 });

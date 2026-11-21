@@ -228,6 +228,12 @@
   box-shadow: var(--shadow-card);
 }
 
+/* Fullscreen fallback (fixed overlay): a backdrop-filter ancestor would become its containing block. */
+html[data-fs-overlay] .glass,
+html[data-fs-overlay] .glass-strong {
+  backdrop-filter: none;
+}
+
 @utility glow-subject {
   box-shadow: var(--shadow-glow);
 }

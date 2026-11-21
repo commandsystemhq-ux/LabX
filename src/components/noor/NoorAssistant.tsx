@@ -29,11 +29,12 @@ import {
 import type { TutorIntent } from "@/data/simulations";
 import { buildTutorReply, detectIntent, MAX_QUESTION_LENGTH } from "@/data/tutor";
 import { requestAiReply } from "@/lib/ai-tutor-client";
-import { parseStudioRequest, type StudioFocus, type StudioIntent } from "@/data/lessons/noorStudio";
-import { loadRadar } from "@/data/lessons/supportRadar";
+import {
+  parseStudioRequest,
+  resolveStudioIntent,
+  type StudioFocus,
+} from "@/data/lessons/noorStudio";
 import { SUPPORT_LESSON_ID } from "@/data/lessons/supportTypes";
-import { runNoorStudio } from "@/lib/noor-studio-flow";
-import { studioStore } from "@/lib/use-noor-studio";
 import { useAuth } from "@/lib/auth";
 import { ui, useLang, type L10n, type UiKey } from "@/lib/i18n";
 import { chatContext, type SavedChat } from "@/lib/noor-chat";
@@ -57,7 +58,7 @@ import {
   useStudioFocus,
 } from "./NoorProvider";
 import { NoorSavedChats } from "./NoorSavedChats";
-import { NoorStudioBar, NoorStudioCard } from "./NoorStudio";
+import { NoorStudioCard } from "./NoorStudio";
 
 const SAVE_NOTE_KEYS: Record<SaveResult | "already", UiKey> = {
   ok: "noorSavedOk",
@@ -107,7 +108,7 @@ function Chip({
 export function NoorAssistant() {
   const { t, l, lang } = useLang();
   const open = useNoorOpen();
-  const { setOpen, openStudio, setStudioFocus } = useNoorControl();
+  const { setOpen, openStudio, openWorkspace } = useNoorControl();
   const studioFocus = useStudioFocus();
   const lessonCtx = useNoorLesson();
   const supportCtx = useNoorSupport();
@@ -203,14 +204,7 @@ export function NoorAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typing]);
 
-  const send = (
-    text: string,
-    hint?: {
-      platform?: PlatformIntent;
-      lesson?: TutorIntent;
-      studio?: { intent: StudioIntent; target: StudioFocus | null };
-    },
-  ) => {
+  const send = (text: string, hint?: { platform?: PlatformIntent; lesson?: TutorIntent }) => {
     if (typing) return;
     const memory = chatContext(chat.messagesRef.current);
     chat.append({ role: "student", text });
@@ -224,22 +218,7 @@ export function NoorAssistant() {
       let reply: { text: string; actions: NoorAction[] };
       let aiAnswered = false;
 
-      if (hint?.studio) {
-        // Noor Studio: build/edit a map or cards, save them in this account, answer with an open button.
-        const accessToken = user ? await getAccessToken() : null;
-        const result = await runNoorStudio({
-          intent: hint.studio.intent,
-          target: hint.studio.target ?? snap.studioFocus,
-          userId: user?.id ?? null,
-          lang: snap.lang,
-          accessToken,
-          radar: loadRadar(typeof window === "undefined" ? null : window.localStorage),
-          store: studioStore,
-        });
-        if (run === runRef.current && result.focus) setStudioFocus(result.focus);
-        reply = { text: result.text, actions: result.actions };
-        aiAnswered = true;
-      } else if (platformIntent) {
+      if (platformIntent) {
         reply = buildPlatformReply(platformIntent, text, snap.platform, snap.stats, snap.progress);
       } else {
         const lessonIntent = hint?.lesson ?? detectIntent(text);
@@ -305,6 +284,23 @@ export function NoorAssistant() {
     })();
   };
 
+  /** Studio commands live in the Studio workspace: the chat only says so and opens it with the request. */
+  const handOffToStudio = (text: string, target: StudioFocus | null) => {
+    chat.append({ role: "student", text });
+    chat.append({
+      role: "noor",
+      text:
+        lang === "ar"
+          ? "ده شغل **🎨 استوديو نور** ✨ فتحتهولك في شاشة مستقلة وبدأت أجهّز طلبك هناك. الشات هنا يفضل للأسئلة السريعة."
+          : "That is a job for **🎨 Noor Studio** ✨ I opened it in its own screen and started on your request there. This chat stays for quick questions.",
+    });
+    openWorkspace({ text, target });
+    if (!support && lessonExists(SUPPORT_LESSON_ID)) {
+      void navigate({ to: "/lesson", search: { id: SUPPORT_LESSON_ID } });
+    }
+    setOpen(false);
+  };
+
   /** Starts a fresh conversation: drops any reply still in flight and clears the saved history. */
   const newChat = () => {
     runRef.current++;
@@ -350,31 +346,20 @@ export function NoorAssistant() {
   const handled = useRef(0);
   const sendRef = useRef(send);
   sendRef.current = send;
+  const handOffRef = useRef(handOffToStudio);
+  handOffRef.current = handOffToStudio;
   useEffect(() => {
     if (!request || request.id === handled.current) return;
     handled.current = request.id;
     const text = request.text.slice(0, MAX_QUESTION_LENGTH);
     // Only requests that opt in are read as Studio commands (a flashcard «explain» prompt is not one).
     const forced = request.studio ?? null;
-    const detected =
-      forced || request.detect
-        ? parseStudioRequest(text, forced ?? live.current.studioFocus)
-        : null;
     const studio =
-      detected ??
-      (forced
-        ? {
-            action: "edit" as const,
-            kind: forced.kind,
-            blank: false,
-            weak: false,
-            request: text,
-          }
-        : null);
-    sendRef.current(
-      text,
-      studio ? { lesson: "free", studio: { intent: studio, target: forced } } : { lesson: "free" },
-    );
+      forced || request.detect
+        ? resolveStudioIntent(text, forced ?? live.current.studioFocus, forced !== null)
+        : null;
+    if (studio) handOffRef.current(text, forced ?? live.current.studioFocus);
+    else sendRef.current(text, { lesson: "free" });
   }, [request]);
 
   const submit = (e: FormEvent) => {
@@ -382,8 +367,11 @@ export function NoorAssistant() {
     const q = input.trim().slice(0, MAX_QUESTION_LENGTH);
     if (!q) return;
     setInput("");
-    const studio = parseStudioRequest(q, live.current.studioFocus);
-    send(q, studio ? { studio: { intent: studio, target: live.current.studioFocus } } : undefined);
+    if (parseStudioRequest(q, live.current.studioFocus)) {
+      handOffToStudio(q, live.current.studioFocus);
+      return;
+    }
+    send(q);
   };
 
   const go = (a: NoorAction) => {
@@ -528,16 +516,6 @@ export function NoorAssistant() {
             onOpen={openSaved}
             onDelete={savedChats.remove}
             onBack={() => setShowSaved(false)}
-          />
-        )}
-
-        {!showSaved && (
-          <NoorStudioBar
-            lang={lang}
-            busy={typing}
-            block={support?.ctx.block ?? null}
-            focus={studioFocus}
-            onRun={(text, intent) => send(text, { studio: { intent, target: studioFocus } })}
           />
         )}
 

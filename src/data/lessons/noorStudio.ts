@@ -621,6 +621,27 @@ export function parseStudioRequest(
   };
 }
 
+/**
+ * The intent of a request routed to the Studio workspace: a recognised command, or — when it is
+ * about a specific pack (`forced`, e.g. «عدّل مع نور» on a map) — a free-form edit of that pack.
+ */
+export function resolveStudioIntent(
+  text: string,
+  target: StudioFocus | null,
+  forced = false,
+): StudioIntent | null {
+  const parsed = parseStudioRequest(text, target);
+  if (parsed) return parsed;
+  if (!forced || !target) return null;
+  return {
+    action: "edit",
+    kind: target.kind,
+    blank: false,
+    weak: false,
+    request: text.trim().slice(0, 300),
+  };
+}
+
 /* ---------------------------- create (local) ---------------------------- */
 
 export interface StudioBuild {

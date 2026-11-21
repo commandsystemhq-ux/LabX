@@ -7,9 +7,16 @@ import {
   ClipboardCheck,
   Brain,
   Layers,
+  Palette,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNoorControl, useStudioOpen } from "@/components/noor/NoorProvider";
+import {
+  useNoorControl,
+  useStudioOpen,
+  useStudioWorkspace,
+  type StudioWorkspaceRequest,
+} from "@/components/noor/NoorProvider";
+import { StudioWorkspace } from "@/components/noor/StudioWorkspace";
 import type { LessonLookup } from "@/data/mockCurriculum";
 import {
   allQuestions,
@@ -67,7 +74,7 @@ import { SelfTests } from "./SelfTests";
 import { S } from "./strings";
 import { WeaknessRadar } from "./WeaknessRadar";
 
-type Page = "block" | "tests" | "radar" | "duel" | "mystery" | "mindmap" | "flashcards";
+type Page = "block" | "tests" | "radar" | "duel" | "mystery" | "mindmap" | "flashcards" | "studio";
 
 const MAX_MISTAKES = 12;
 const MAX_ACTIONS = 10;
@@ -104,8 +111,9 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   const { l, lang } = useLang();
   const lessonId = lookup.lesson.id;
   const duelParams = useMemo(() => parseDuelParams({ duel, vs }), [duel, vs]);
-  const { setSupport, setOpen, ask, consumeStudioOpen } = useNoorControl();
+  const { setSupport, setOpen, ask, consumeStudioOpen, consumeWorkspace } = useNoorControl();
   const studioOpen = useStudioOpen();
+  const workspaceReq = useStudioWorkspace();
 
   const [page, setPage] = useState<Page>(duelParams ? "duel" : "block");
   /** A Noor Studio creation the chat asked to open (remounts the Lab so it starts on that pack). */
@@ -113,6 +121,10 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
     n: 0,
     packId: null,
   });
+  /** Where closing a Lab goes back to (the Studio when the pack was opened from there). */
+  const [labBack, setLabBack] = useState<Page>("block");
+  /** A command from the chat waiting for the Studio workspace to run it. */
+  const [studioReq, setStudioReq] = useState<StudioWorkspaceRequest | null>(null);
   const [active, setActive] = useState(1);
   const [phases, setPhases] = useState<Record<number, Phase>>({});
   const [mode, setMode] = useState<StageMode>("3d");
@@ -130,9 +142,17 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   useEffect(() => {
     if (!studioOpen) return;
     setStudioView({ n: studioOpen.id, packId: studioOpen.packId });
+    setLabBack("block");
     setPage(studioOpen.kind === "mindmap" ? "mindmap" : "flashcards");
     consumeStudioOpen(studioOpen.id);
   }, [studioOpen, consumeStudioOpen]);
+
+  useEffect(() => {
+    if (!workspaceReq) return;
+    setStudioReq(workspaceReq);
+    setPage("studio");
+    consumeWorkspace(workspaceReq.id);
+  }, [workspaceReq, consumeWorkspace]);
 
   // Everything persisted is read once on the client (the first render must match the server).
   useEffect(() => {
@@ -262,6 +282,25 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   const doneTests = new Set(progress.tests);
   const pct = Math.round((100 * unitsDone(progress)) / TOTAL_UNITS);
 
+  if (page === "studio") {
+    return (
+      <StudioWorkspace
+        block={active}
+        radar={radar}
+        request={studioReq}
+        onHandled={(id) => setStudioReq((r) => (r?.id === id ? null : r))}
+        onOpenPack={(kind, packId) => {
+          setStudioView((v) => ({ n: v.n + 1, packId }));
+          setLabBack("studio");
+          setPage(kind === "mindmap" ? "mindmap" : "flashcards");
+        }}
+        onQuizBlock={(n) => goBlock(n, "quiz")}
+        onChallenge={() => setPage("duel")}
+        onClose={() => setPage("block")}
+      />
+    );
+  }
+
   const nav: { id: Page; label: L10n; icon: typeof BookOpen }[] = [
     { id: "block", label: S.blocks, icon: BookOpen },
     { id: "tests", label: S.tests, icon: ClipboardCheck },
@@ -271,6 +310,7 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
   ];
 
   const tools: { id: Page; label: L10n; icon: typeof Brain }[] = [
+    { id: "studio", label: { ar: "🎨 استوديو نور", en: "🎨 Noor Studio" }, icon: Palette },
     { id: "mindmap", label: { ar: "الخريطة الذهنية", en: "Mind Map" }, icon: Brain },
     { id: "flashcards", label: { ar: "البطاقات الذكية", en: "Flashcards" }, icon: Layers },
   ];
@@ -336,7 +376,10 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
               key={t.id}
               type="button"
               aria-current={page === t.id ? "page" : undefined}
-              onClick={() => setPage(t.id)}
+              onClick={() => {
+                setLabBack("block");
+                setPage(t.id);
+              }}
               className={
                 "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition " +
                 (page === t.id
@@ -519,7 +562,7 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
               goBlock(n, "board");
             }}
             onResult={(b, itemId, ok) => record(b, itemId, ok)}
-            onClose={() => setPage("block")}
+            onClose={() => setPage(labBack)}
           />
         </div>
       )}
@@ -530,7 +573,7 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
             key={`fc-${studioView.n}`}
             initialPackId={studioView.packId}
             onGoToBlock={(n) => goBlock(n, "board")}
-            onClose={() => setPage("block")}
+            onClose={() => setPage(labBack)}
           />
         </div>
       )}

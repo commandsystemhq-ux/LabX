@@ -45,7 +45,9 @@ describe("FlashcardsLab: every card shows something on its front", () => {
         // The figure must get real room (the old bug: it collapsed to 0×0) and use light strokes.
         expect(svg.getAttribute("class"), `card ${i + 1}`).toContain("h-full");
         expect(svg.getAttribute("class")).toContain("w-full");
-        expect(svg.getAttribute("viewBox")).toMatch(/^0 0 \d+ \d+$/);
+        // Padded viewBox: the drawing keeps a margin inside the frame and is never cropped.
+        expect(svg.getAttribute("viewBox")).toMatch(/^-\d+ -\d+ \d+ \d+$/);
+        expect(svg.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
         expect(svg.querySelectorAll("path,rect,ellipse").length).toBeGreaterThan(3);
         expect(svg.innerHTML).toMatch(/#E2E8F0|#e2e8f0/i);
         expect(svg.innerHTML).toMatch(/#38BDF8/i);

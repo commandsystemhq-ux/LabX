@@ -30,7 +30,9 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { FullscreenButton } from "@/components/common/FullscreenButton";
 import { useNoorControl } from "@/components/noor/NoorProvider";
+import { useFullscreen } from "@/lib/use-fullscreen";
 import {
   MM,
   ancestorIds,
@@ -481,6 +483,7 @@ export function MindMapLab({
   const rtl = lang === "ar";
   const { ask, setOpen, setStudioFocus } = useNoorControl();
   const { userId, state: studio, mutate } = useNoorStudio();
+  const fs = useFullscreen();
 
   const [sourceId, setSourceId] = useState<string>(initialPackId ?? "base");
   const [tab, setTab] = useState<"base" | "mine">(initialPackId ? "mine" : "base");
@@ -844,10 +847,11 @@ export function MindMapLab({
     : { right: 0, wrong: 0 };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={fs.ref} className={"flex flex-col gap-3 " + fs.frame}>
       {/* Header */}
       <header className="flex flex-wrap items-center gap-2">
         <h2 className="min-w-0 flex-1 text-lg font-bold">🧠 {l(ui.title)}</h2>
+        <FullscreenButton active={fs.active} onToggle={() => void fs.toggle()} />
         <div className="flex rounded-full border p-0.5 text-xs font-bold">
           <button
             type="button"
@@ -1050,7 +1054,10 @@ export function MindMapLab({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         style={{ background: WORLD_BG, touchAction: "none" }}
-        className="relative h-[70dvh] min-h-[26rem] w-full cursor-grab touch-none select-none overflow-hidden rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400 active:cursor-grabbing"
+        className={
+          "relative w-full cursor-grab touch-none select-none overflow-hidden rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400 active:cursor-grabbing " +
+          (fs.active ? "min-h-0 flex-1" : "h-[70dvh] min-h-[26rem]")
+        }
       >
         <div
           className="absolute left-0 top-0 will-change-transform"

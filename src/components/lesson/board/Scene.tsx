@@ -1,7 +1,9 @@
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { FullscreenButton } from "@/components/common/FullscreenButton";
 import { FIGURES } from "@/data/lessons/supportFigures";
 import type { SceneView } from "@/data/lessons/supportTypes";
 import { useLang } from "@/lib/i18n";
+import { useFullscreen } from "@/lib/use-fullscreen";
 import { detectWebGL } from "../scenes/AdrenalineStage";
 import { isHumanFocus, isPlantFocus } from "./boneFocus";
 import { FigureSvg } from "./FigureSvg";
@@ -64,6 +66,7 @@ export function Scene({
   const { l, lang } = useLang();
   const ar = lang === "ar";
   const view = views[Math.min(viewIndex, views.length - 1)]!;
+  const fs = useFullscreen<HTMLElement>();
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(detectWebGL()), []);
 
@@ -74,7 +77,11 @@ export function Scene({
         lang={lang}
         mode={labels ? "show" : "hide"}
         marks={scene.highlight}
-        className={"mx-auto w-full " + (FIGURES[view.figure].h > 400 ? "max-h-140" : "max-h-105")}
+        className={
+          fs.active
+            ? "mx-auto min-h-0 w-full flex-1"
+            : "mx-auto w-full " + (FIGURES[view.figure].h > 400 ? "max-h-140" : "max-h-105")
+        }
       />
       <p className="mt-1 text-center text-[11px] text-slate-500">{l(FIGURES[view.figure].title)}</p>
     </div>
@@ -140,7 +147,11 @@ export function Scene({
   }
 
   return (
-    <section aria-label={l(S.title)} className="glass flex flex-col gap-2 rounded-3xl p-3">
+    <section
+      ref={fs.ref}
+      aria-label={l(S.title)}
+      className={"glass flex flex-col gap-2 rounded-3xl " + (fs.active ? "" : "p-3 ") + fs.frame}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-full border border-border bg-background/50 p-0.5" role="group">
           {(["3d", "2d"] as const).map((m) => (
@@ -170,6 +181,7 @@ export function Scene({
             {l(labels ? S.hideLabels : S.showLabels)}
           </button>
         )}
+        <FullscreenButton active={fs.active} onToggle={() => void fs.toggle()} />
         {views.length > 1 && (
           <div className="ms-auto flex flex-wrap gap-1" role="group">
             {views.map((v, i) => (
@@ -191,7 +203,7 @@ export function Scene({
           </div>
         )}
       </div>
-      <div className="h-[min(56vh,520px)] min-h-80">{body}</div>
+      <div className={fs.active ? "min-h-0 flex-1" : "h-[min(56vh,520px)] min-h-80"}>{body}</div>
     </section>
   );
 }

@@ -85,6 +85,12 @@ function drawShape(s: Shape, key: string, revealed?: ReadonlySet<string>): React
           {s.s}
         </text>
       );
+    case "g":
+      return (
+        <g key={key} transform={`translate(${s.dx} ${s.dy})`}>
+          {s.shapes.map((c, i) => drawShape(c, `${key}-${i}`, revealed))}
+        </g>
+      );
     case "mirror":
       return (
         <g key={key}>
@@ -106,6 +112,15 @@ function labelPos(c: Callout): { x: number; y: number; lx: number; ly: number } 
     return { x, y: c.ly, lx: x, ly: c.ly - 9 };
   }
   return { x: COL_X[c.side], y: c.ly, lx: LEAD_X[c.side], ly: c.ly - 4 };
+}
+
+/** Room kept around the drawing inside the card frame, so strokes and labels never touch the edge. */
+export const FIGURE_PAD = 12;
+
+/** The widest footprint of a callout's label (the 112 × 20 chip of `slots` mode). */
+export function labelBox(c: Callout): { x0: number; y0: number; x1: number; y1: number } {
+  const { x, y } = labelPos(c);
+  return { x0: x - 56, y0: y - 10, x1: x + 56, y1: y + 10 };
 }
 
 export type LabelMode = "show" | "hide" | "slots";
@@ -306,17 +321,18 @@ export const FigureSvg = memo(function FigureSvg({
   const markSet = new Set(marks);
   return (
     <svg
-      viewBox={`0 0 ${figure.w} ${figure.h}`}
+      viewBox={`${-FIGURE_PAD} ${-FIGURE_PAD} ${figure.w + 2 * FIGURE_PAD} ${figure.h + 2 * FIGURE_PAD}`}
+      preserveAspectRatio="xMidYMid meet"
       className={className}
       role="img"
       aria-label={ariaLabel ?? figure.title[lang]}
       style={{ background: "#1e293b", borderRadius: 16, direction: "ltr" }}
     >
       <rect
-        x="1"
-        y="1"
-        width={figure.w - 2}
-        height={figure.h - 2}
+        x={1 - FIGURE_PAD}
+        y={1 - FIGURE_PAD}
+        width={figure.w + 2 * FIGURE_PAD - 2}
+        height={figure.h + 2 * FIGURE_PAD - 2}
         rx="14"
         fill="none"
         stroke="#38BDF8"

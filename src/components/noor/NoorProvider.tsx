@@ -29,6 +29,14 @@ export interface NoorRequest {
   detect?: boolean;
 }
 
+/** The chat handing a Studio command («اعملّي خريطة…», «عدّل دي») over to the Studio workspace. */
+export interface StudioWorkspaceRequest {
+  id: number;
+  text: string;
+  /** The pack the command is about (an edit), if any. */
+  target: StudioFocus | null;
+}
+
 /** Asks the live board to open a Noor Studio creation in the Mind Map / Flashcards Lab. */
 export interface StudioOpenRequest {
   id: number;
@@ -45,6 +53,9 @@ interface Control {
   /** Asks the board to open a Studio pack (kept until the board consumes it). */
   openStudio: (kind: StudioKind, packId: string | null) => void;
   consumeStudioOpen: (id: number) => void;
+  /** Asks the board to open the full Studio workspace, optionally running `text` there. */
+  openWorkspace: (req?: { text?: string; target?: StudioFocus | null }) => void;
+  consumeWorkspace: (id: number) => void;
   /** Remembers which pack «عدّل دي» refers to. */
   setStudioFocus: (focus: StudioFocus | null) => void;
 }
@@ -58,6 +69,8 @@ const ControlContext = createContext<Control>({
   ask: () => {},
   openStudio: () => {},
   consumeStudioOpen: () => {},
+  openWorkspace: () => {},
+  consumeWorkspace: () => {},
   setStudioFocus: () => {},
 });
 const OpenContext = createContext(false);
@@ -66,6 +79,7 @@ const SupportContext = createContext<NoorSupport | null>(null);
 const RequestContext = createContext<NoorRequest | null>(null);
 const StudioOpenContext = createContext<StudioOpenRequest | null>(null);
 const StudioFocusContext = createContext<StudioFocus | null>(null);
+const WorkspaceContext = createContext<StudioWorkspaceRequest | null>(null);
 
 export function NoorProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -74,6 +88,7 @@ export function NoorProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<NoorRequest | null>(null);
   const [studioOpen, setStudioOpen] = useState<StudioOpenRequest | null>(null);
   const [studioFocus, setStudioFocus] = useState<StudioFocus | null>(null);
+  const [workspace, setWorkspace] = useState<StudioWorkspaceRequest | null>(null);
   const control = useMemo<Control>(
     () => ({
       setOpen,
@@ -91,6 +106,13 @@ export function NoorProvider({ children }: { children: ReactNode }) {
       openStudio: (kind, packId) =>
         setStudioOpen((prev) => ({ id: (prev?.id ?? 0) + 1, kind, packId })),
       consumeStudioOpen: (id) => setStudioOpen((prev) => (prev?.id === id ? null : prev)),
+      openWorkspace: (req) =>
+        setWorkspace((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          text: req?.text ?? "",
+          target: req?.target ?? null,
+        })),
+      consumeWorkspace: (id) => setWorkspace((prev) => (prev?.id === id ? null : prev)),
       setStudioFocus: (focus) =>
         setStudioFocus((prev) =>
           prev?.kind === focus?.kind && prev?.packId === focus?.packId ? prev : focus,
@@ -106,7 +128,9 @@ export function NoorProvider({ children }: { children: ReactNode }) {
             <RequestContext.Provider value={request}>
               <StudioOpenContext.Provider value={studioOpen}>
                 <StudioFocusContext.Provider value={studioFocus}>
-                  {children}
+                  <WorkspaceContext.Provider value={workspace}>
+                    {children}
+                  </WorkspaceContext.Provider>
                 </StudioFocusContext.Provider>
               </StudioOpenContext.Provider>
             </RequestContext.Provider>
@@ -125,3 +149,4 @@ export const useNoorSupport = () => useContext(SupportContext);
 export const useNoorRequest = () => useContext(RequestContext);
 export const useStudioOpen = () => useContext(StudioOpenContext);
 export const useStudioFocus = () => useContext(StudioFocusContext);
+export const useStudioWorkspace = () => useContext(WorkspaceContext);

@@ -62,6 +62,8 @@ export type Shape =
       part?: string;
     }
   | { t: "text"; x: number; y: number; s: string; size?: number }
+  /** The shapes moved by (dx, dy): lets a panel drawn in its own coordinates be placed anywhere. */
+  | { t: "g"; dx: number; dy: number; shapes: Shape[] }
   /** The shapes plus their mirror image about the vertical axis x = 260. */
   | { t: "mirror"; shapes: Shape[] };
 
@@ -254,41 +256,58 @@ const tissues: Figure = {
   id: "tissues",
   title: { ar: "الأنسجة النباتية البسيطة والمركبة", en: "Simple and complex plant tissues" },
   w: 520,
-  h: 300,
+  h: 524,
+  // Top: the three simple tissues side by side with their labels in a strip below (and the
+  // «intercellular space» label in a strip above). Bottom: xylem and phloem stacked in the middle,
+  // so their labels fit the two side columns without touching the frame or each other.
   shapes: [
-    ...parenchymaCells(),
-    ...collenchymaCells(),
-    ...sclerenchymaCells(),
-    { t: "rect", x: 10, y: 155, w: 240, h: 135, rx: 8, tone: "none", sw: 1 },
-    { t: "rect", x: 40, y: 165, w: 36, h: 100, rx: 4, tone: "xyl", sw: 5 },
-    ell(58, 185, 4, 2.5, "none", 0.8),
-    ell(58, 215, 4, 2.5, "none", 0.8),
-    ell(58, 245, 4, 2.5, "none", 0.8),
-    { t: "path", d: "M110 165 L132 165 L124 262 L118 262 Z", tone: "xyl", sw: 3 },
-    ell(121, 195, 4, 2.5, "none", 0.8),
-    ell(121, 230, 4, 2.5, "none", 0.8),
-    { t: "path", d: "M165 168 L187 168 L180 262 L172 262 Z", tone: "xyl", sw: 3 },
-    { t: "rect", x: 265, y: 155, w: 245, h: 135, rx: 8, tone: "none", sw: 1 },
-    { t: "rect", x: 305, y: 165, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
-    { t: "rect", x: 305, y: 193, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
-    { t: "rect", x: 305, y: 221, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
-    line("M305 193 H345 M305 221 H345", 2.5, "ink"),
-    { t: "rect", x: 355, y: 168, w: 14, h: 80, rx: 5, tone: "cyto", sw: 1.5 },
-    ell(362, 190, 3.5, 3.5, "nuc", 1),
-    ell(362, 228, 3.5, 3.5, "nuc", 1),
+    { t: "g", dx: 0, dy: 32, shapes: parenchymaCells() },
+    { t: "g", dx: 0, dy: 32, shapes: collenchymaCells() },
+    { t: "g", dx: 0, dy: 32, shapes: sclerenchymaCells() },
+    {
+      t: "g",
+      dx: 130,
+      dy: 69,
+      shapes: [
+        { t: "rect", x: 10, y: 155, w: 240, h: 135, rx: 8, tone: "none", sw: 1 },
+        { t: "rect", x: 40, y: 165, w: 36, h: 100, rx: 4, tone: "xyl", sw: 5 },
+        ell(58, 185, 4, 2.5, "none", 0.8),
+        ell(58, 215, 4, 2.5, "none", 0.8),
+        ell(58, 245, 4, 2.5, "none", 0.8),
+        { t: "path", d: "M110 165 L132 165 L124 262 L118 262 Z", tone: "xyl", sw: 3 },
+        ell(121, 195, 4, 2.5, "none", 0.8),
+        ell(121, 230, 4, 2.5, "none", 0.8),
+        { t: "path", d: "M165 168 L187 168 L180 262 L172 262 Z", tone: "xyl", sw: 3 },
+      ],
+    },
+    {
+      t: "g",
+      dx: -127,
+      dy: 218,
+      shapes: [
+        { t: "rect", x: 265, y: 155, w: 245, h: 135, rx: 8, tone: "none", sw: 1 },
+        { t: "rect", x: 305, y: 165, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
+        { t: "rect", x: 305, y: 193, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
+        { t: "rect", x: 305, y: 221, w: 40, h: 28, rx: 3, tone: "phl", sw: 1.5 },
+        line("M305 193 H345 M305 221 H345", 2.5, "ink"),
+        { t: "rect", x: 355, y: 168, w: 14, h: 80, rx: 5, tone: "cyto", sw: 1.5 },
+        ell(362, 190, 3.5, 3.5, "nuc", 1),
+        ell(362, 228, 3.5, 3.5, "nuc", 1),
+      ],
+    },
   ],
   callouts: [
-    c("parenchyma", "النسيج البارانشيمي", "Parenchyma", 95, 40, "in", 133, { tx: 90 }),
-    c("intercellular-space", "مسافات بينية", "Intercellular space", 70, 61, "in", 12, { tx: 100 }),
-    c("collenchyma", "النسيج الكولنشيمي", "Collenchyma", 260, 40, "in", 133, { tx: 260 }),
-    c("sclerenchyma", "النسيج الإسكرلنشيمي", "Sclerenchyma", 430, 40, "in", 133, { tx: 430 }),
-    c("xylem", "نسيج الخشب", "Xylem", 120, 270, "in", 285, { tx: 130 }),
-    c("vessel", "وعاء", "Vessel", 58, 175, "in", 298, { tx: 58 }),
-    c("pit", "النقر", "Pit", 58, 215, "in", 298, { tx: 112 }),
-    c("tracheid", "قصيبة", "Tracheid", 176, 200, "in", 298, { tx: 190 }),
-    c("phloem", "نسيج اللحاء", "Phloem", 380, 270, "in", 285, { tx: 385 }),
-    c("sieve-tube", "أنبوبة غربالية", "Sieve tube", 325, 207, "in", 298, { tx: 320 }),
-    c("companion-cell", "خلية مرافقة", "Companion cell", 362, 208, "in", 298, { tx: 420 }),
+    c("parenchyma", "النسيج البارانشيمي", "Parenchyma", 95, 154, "in", 190, { tx: 90 }),
+    c("intercellular-space", "مسافات بينية", "Intercellular space", 70, 93, "in", 20, { tx: 70 }),
+    c("collenchyma", "النسيج الكولنشيمي", "Collenchyma", 260, 154, "in", 190, { tx: 260 }),
+    c("sclerenchyma", "النسيج الإسكرلنشيمي", "Sclerenchyma", 430, 154, "in", 190, { tx: 430 }),
+    c("xylem", "نسيج الخشب", "Xylem", 250, 339, "r", 339),
+    c("vessel", "وعاء", "Vessel", 188, 244, "l", 244),
+    c("pit", "النقر", "Pit", 188, 284, "l", 284),
+    c("tracheid", "قصيبة", "Tracheid", 306, 269, "r", 269),
+    c("phloem", "نسيج اللحاء", "Phloem", 253, 488, "r", 488),
+    c("sieve-tube", "أنبوبة غربالية", "Sieve tube", 198, 425, "l", 425),
+    c("companion-cell", "خلية مرافقة", "Companion cell", 235, 426, "r", 426),
   ],
 };
 
@@ -609,7 +628,7 @@ const skull: Figure = {
     en: "The skull: front, side and bottom views",
   },
   w: 520,
-  h: 300,
+  h: 336,
   shapes: [
     ell(95, 100, 62, 72, "bone", 2),
     ell(74, 100, 14, 12, "none", 1.6),
@@ -639,11 +658,11 @@ const skull: Figure = {
   ],
   callouts: [
     c("cranial-part", "الجزء المخي", "Cranial part", 95, 60, "in", 20, { tx: 95 }),
-    c("facial-part", "الجزء الوجهي", "Facial part", 60, 118, "in", 238, { tx: 60 }),
-    c("maxilla", "الفك العلوي", "Upper jaw", 95, 152, "in", 256, { tx: 140 }),
-    c("teeth", "الأسنان", "Teeth", 112, 172, "in", 276, { tx: 60 }),
-    c("mandible", "الفك السفلي", "Lower jaw", 100, 214, "in", 292, { tx: 150 }),
-    c("foramen-magnum", "الثقب الكبير", "Foramen magnum", 430, 150, "in", 280, { tx: 430 }),
+    c("facial-part", "الجزء الوجهي", "Facial part", 60, 118, "in", 244, { tx: 62 }),
+    c("maxilla", "الفك العلوي", "Upper jaw", 95, 152, "in", 268, { tx: 140 }),
+    c("teeth", "الأسنان", "Teeth", 112, 172, "in", 292, { tx: 62 }),
+    c("mandible", "الفك السفلي", "Lower jaw", 100, 214, "in", 316, { tx: 150 }),
+    c("foramen-magnum", "الثقب الكبير", "Foramen magnum", 430, 150, "in", 284, { tx: 430 }),
   ],
 };
 
