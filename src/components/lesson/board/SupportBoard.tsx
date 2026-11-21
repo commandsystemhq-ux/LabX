@@ -1,4 +1,13 @@
-import { BookOpen, Target, Swords, Search, NotebookPen, ClipboardCheck } from "lucide-react";
+import {
+  BookOpen,
+  Target,
+  Swords,
+  Search,
+  NotebookPen,
+  ClipboardCheck,
+  Brain,
+  Layers,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNoorControl } from "@/components/noor/NoorProvider";
 import type { LessonLookup } from "@/data/mockCurriculum";
@@ -48,6 +57,8 @@ import { useLang, type L10n } from "@/lib/i18n";
 import { progressStore } from "@/lib/progress";
 import { BlockView, type Phase } from "./BlockView";
 import type { TaskEvent } from "./DrawingLab";
+import { FlashcardsLab } from "./FlashcardsLab";
+import { MindMapLab } from "./MindMapLab";
 import { MysteryCase } from "./MysteryCase";
 import { Notebook } from "./Notebook";
 import { PracticalDuel } from "./PracticalDuel";
@@ -56,7 +67,7 @@ import { SelfTests } from "./SelfTests";
 import { S } from "./strings";
 import { WeaknessRadar } from "./WeaknessRadar";
 
-type Page = "block" | "tests" | "radar" | "duel" | "mystery";
+type Page = "block" | "tests" | "radar" | "duel" | "mystery" | "mindmap" | "flashcards";
 
 const MAX_MISTAKES = 12;
 const MAX_ACTIONS = 10;
@@ -246,6 +257,11 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
     { id: "duel", label: S.duel, icon: Swords },
   ];
 
+  const tools: { id: Page; label: L10n; icon: typeof Brain }[] = [
+    { id: "mindmap", label: { ar: "الخريطة الذهنية", en: "Mind Map" }, icon: Brain },
+    { id: "flashcards", label: { ar: "البطاقات الذكية", en: "Flashcards" }, icon: Layers },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       <header className="glass rounded-3xl p-4">
@@ -301,6 +317,24 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
             </button>
           ))}
         </nav>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {tools.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-current={page === t.id ? "page" : undefined}
+              onClick={() => setPage(t.id)}
+              className={
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition " +
+                (page === t.id
+                  ? "border-subject bg-subject/25"
+                  : "border-border bg-background/50 hover:bg-accent")
+              }
+            >
+              <t.icon className="size-3.5" /> {l(t.label)}
+            </button>
+          ))}
+        </div>
       </header>
 
       {page === "block" && (
@@ -458,6 +492,25 @@ export function SupportBoard({ lookup, duel, vs }: SupportBoardProps) {
           params={duelParams}
           onAnswer={(b, id, ok) => record(b, id, ok)}
         />
+      )}
+
+      {page === "mindmap" && (
+        <div className="glass rounded-3xl p-4">
+          <MindMapLab
+            radar={radar}
+            onGoToBlock={(n) => goBlock(n, "board")}
+            onClose={() => setPage("block")}
+          />
+        </div>
+      )}
+
+      {page === "flashcards" && (
+        <div className="glass rounded-3xl p-4">
+          <FlashcardsLab
+            onGoToBlock={(n) => goBlock(n, "board")}
+            onClose={() => setPage("block")}
+          />
+        </div>
       )}
 
       {notebookOpen && (

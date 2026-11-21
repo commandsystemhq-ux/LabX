@@ -233,3 +233,56 @@ export interface SelfTest {
   blocks: number[];
   questions: SupportQuestion[];
 }
+
+/* -------------------------------- Mind Map -------------------------------- */
+
+export interface MindMapNode {
+  id: string;
+  title: L10n;
+  /** Badge showing count or summary (e.g., "206 عظمة", "5 مجموعات"). */
+  badge?: L10n;
+  /** Short summary shown in the quick card. */
+  summary?: L10n;
+  /** Block number this node links to (1–14). */
+  blockId?: number;
+  /** Whether this node has a direct 3D view. */
+  supports3D?: boolean;
+  /** Child nodes (branches). */
+  children?: MindMapNode[];
+}
+
+export interface MindMapData {
+  lessonId: string;
+  root: MindMapNode;
+}
+
+/* -------------------------------- Flashcards ------------------------------- */
+
+export type FlashcardRating = "known" | "hard" | "forgot";
+
+export interface Flashcard {
+  id: string;
+  /** Block number this card belongs to (1–14). */
+  blockId: number;
+  /** Front side: question or prompt. */
+  front: L10n;
+  /** Back side: answer from the textbook. */
+  back: L10n;
+  /** Optional visual figure (shown on front without labels). */
+  visual?: { figure: FigureId; hideLabels?: boolean };
+  /** Hint shown on front (optional). */
+  hint?: L10n;
+}
+
+export interface FlashcardState {
+  v: 1;
+  /** Card id → rating. */
+  ratings: Record<string, FlashcardRating>;
+  /** Card id → next review timestamp (ms). */
+  nextReview: Record<string, number>;
+}
+
+export interface FlashcardsData {
+  lessonId: string;
+  cards: Flashcard[];
+}

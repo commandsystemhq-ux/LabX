@@ -14,7 +14,8 @@ src/components/
     board/             «السبورة الحية» (تُعرض بدل LessonWorkspace للدروس ذات `board:"support"`): SupportBoard (منسّق: تقدّم، رادار، كراسة، نور) ← BlockView (سؤال ← سبورة ← عملي ← عودة + feynman)،
                        Scene (تبديل 3D ↔ 2D؛ كسول وبدون WebGL يرجع للرسمة)، BoneCanvas (مجسمات skeleton/muscles الحقيقية + boneFocus.ts) و PlantCanvas (خلية/أنسجة/ساق إجرائية)،
                        labels.tsx (تسميات DOM بدل drei `Html` الذي يكسر React 19 عند فكّ الـ Canvas)، FigureSvg، DrawingLab (تسمية/تركيب، مختبر الترسيب)، LabTasks، LabTools، GraphLab، CompareArena،
-                       ExamTrap، FeynmanCheck (مايك Web Speech عبر lib/speech.ts مع fallback)، QuestionCard، SelfTests، MysteryCase، WeaknessRadar، PracticalDuel، Notebook
+                       ExamTrap، FeynmanCheck (مايك Web Speech عبر lib/speech.ts مع fallback)، QuestionCard، SelfTests، MysteryCase، WeaknessRadar، PracticalDuel， Notebook，
+                       MindMapLab (خريطة ذهنية تفاعلية)، FlashcardsLab (بطاقات ذكية)
   noor/                NoorProvider (سياق: open + بيانات الدرس الحية) و NoorAssistant (الواجهة العامة، تُركَّب مرة واحدة في __root) و NoorMarkdown (عرض Markdown خفيف آمن كعناصر React بلا HTML) و NoorSavedChats (قائمة المحادثات المحفوظة: فتح/حذف بتأكيد من نقرتين)
   brand/ common/ ui/   Logo، تبديل اللغة، أيقونات المواد، مكتبة shadcn الجاهزة (لا تُعدَّل)
 src/data/
@@ -30,6 +31,7 @@ src/data/
                        supportLesson.ts (التجميع + إعداد المشاهد والأدوات لكل جزئية)، supportLab.ts (مجموعات مجسمات BodyParts3D، مختبر الترسيب، منحنيات الفقرات والجمجمة، الكعبرة)،
                        supportFigures.ts (رسمات 2D «شكل الامتحان» + callouts)، supportCompare.ts، supportRadar.ts، supportDuel.ts (seed في الرابط)،
                        supportMystery.ts، supportNotebook.ts، supportProgress.ts (كلها تُنظَّف عند القراءة من localStorage)، supportNoor.ts (سياق نور + ردود محلية من نص الكتاب + مراجعة feynman)،
+                       supportMindMap.ts (خريطة ذهنية تفاعلية للدرس)، supportFlashcards.ts (بطاقات ذكية بالتكرار المتباعد)،
                        anatomyNodes.ts (مولَّد من GLB بـ scripts/gen-anatomy-nodes.py)
 src/lib/
   i18n.tsx             LanguageProvider (ar/en + RTL) وكل نصوص الواجهة `ui`
